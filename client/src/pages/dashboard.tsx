@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { Header } from "@/components/header";
 import { DashboardSummary } from "@/components/dashboard-summary";
 import { AllocationChart } from "@/components/allocation-chart";
-import { UpcomingPayments } from "@/components/upcoming-payments";
+import { PortfolioPerformance } from "@/components/upcoming-payments";
 import { InvestmentTable } from "@/components/investment-table";
 import { AddInvestmentModal } from "@/components/add-investment-modal";
 import { Button } from "@/components/ui/button";
@@ -53,7 +53,7 @@ export default function Dashboard() {
           <div className="lg:col-span-2">
             <AllocationChart />
           </div>
-          <UpcomingPayments />
+          <PortfolioPerformance />
         </div>
 
         <InvestmentTable onEditInvestment={handleEditInvestment} />

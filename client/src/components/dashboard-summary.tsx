@@ -7,7 +7,11 @@ interface DashboardSummary {
   currentValue: number;
   totalGains: number;
   gainsPercentage: number;
+  changeVsLastMonth: number;
   upcomingPayments: number;
+  nextPaymentAmount: number | null;
+  nextPaymentDate: number | null;
+  nextPaymentName: string | null;
 }
 
 export function DashboardSummary() {
@@ -53,8 +57,10 @@ export function DashboardSummary() {
             </div>
           </div>
           <div className="flex items-center mt-4 text-sm">
-            <ArrowUp className="text-green-500 mr-1" size={16} />
-            <span className="text-green-500 font-medium">+12.5%</span>
+            <ArrowUp className={`${summary?.changeVsLastMonth !== undefined && summary.changeVsLastMonth >= 0 ? 'text-green-500' : 'text-red-500'} mr-1`} size={16} />
+            <span className={`${summary?.changeVsLastMonth !== undefined && summary.changeVsLastMonth >= 0 ? 'text-green-500' : 'text-red-500'} font-medium`}>
+              {summary?.changeVsLastMonth !== undefined && summary.changeVsLastMonth >= 0 ? '+' : ''}{summary?.changeVsLastMonth?.toFixed(1) || '0.0'}%
+            </span>
             <span className="text-muted-foreground ml-2">vs last month</span>
           </div>
         </CardContent>
@@ -98,7 +104,13 @@ export function DashboardSummary() {
           </div>
           <div className="flex items-center mt-4 text-sm">
             <span className="text-muted-foreground">Next payment: </span>
-            <span className="text-foreground font-medium ml-1">₹5,000 on 15th</span>
+            {summary?.nextPaymentAmount && summary?.nextPaymentDate ? (
+              <span className="text-foreground font-medium ml-1">
+                {formatCurrency(summary.nextPaymentAmount)} on {summary.nextPaymentDate}{summary.nextPaymentDate === 1 ? 'st' : summary.nextPaymentDate === 2 ? 'nd' : summary.nextPaymentDate === 3 ? 'rd' : 'th'}
+              </span>
+            ) : (
+              <span className="text-muted-foreground font-medium ml-1">No upcoming payments</span>
+            )}
           </div>
         </CardContent>
       </Card>

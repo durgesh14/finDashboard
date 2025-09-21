@@ -42,7 +42,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { insertBillSchema } from "@shared/schema";
+import { insertBillSchema, insertBillPaymentSchema } from "@shared/schema";
 import { z } from "zod";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
 
@@ -84,6 +84,13 @@ const CATEGORY_LABELS = {
 
 const CHART_COLORS = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444', '#06B6D4', '#6B7280', '#EC4899', '#84CC16'];
 
+interface MonthlyTotal {
+  month: number;
+  monthName: string;
+  projected: number;
+  actual: number;
+}
+
 interface BillsSummary {
   totalMonthlyBills: number;
   totalQuarterlyBills: number;
@@ -92,6 +99,8 @@ interface BillsSummary {
   billsDueThisWeek: number;
   activeBillsCount: number;
   categoryBreakdown: Record<string, { total: number; count: number }>;
+  monthlyTotals: MonthlyTotal[];
+  year: number;
 }
 
 const billFormSchema = insertBillSchema.extend({
@@ -106,6 +115,9 @@ export default function Bills() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingBill, setEditingBill] = useState<Bill | null>(null);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [isRecordPaymentModalOpen, setIsRecordPaymentModalOpen] = useState(false);
+  const [selectedBillForPayment, setSelectedBillForPayment] = useState<Bill | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -115,7 +127,28 @@ export default function Bills() {
   });
 
   const { data: summary, isLoading: summaryLoading } = useQuery<BillsSummary>({
-    queryKey: ["/api/bills/summary"],
+    queryKey: ["/api/bills/summary", selectedYear],
+    queryFn: () => fetch(`/api/bills/summary?year=${selectedYear}`).then(res => res.json()),
+  });
+
+  const recordPaymentMutation = useMutation({
+    mutationFn: (data: { billId: string; amount: string; paidDate: string; dueDate: string; status: string }) =>
+      apiRequest("POST", `/api/bills/${data.billId}/payments`, {
+        amount: data.amount,
+        paidDate: data.paidDate,
+        dueDate: data.dueDate,
+        status: data.status,
+      }),
+    onSuccess: () => {
+      toast({ title: "Payment recorded successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/bills/summary", selectedYear] });
+      queryClient.invalidateQueries({ queryKey: ["/api/bills"] });
+      setIsRecordPaymentModalOpen(false);
+      setSelectedBillForPayment(null);
+    },
+    onError: () => {
+      toast({ title: "Failed to record payment", variant: "destructive" });
+    },
   });
 
   const deleteMutation = useMutation({
@@ -258,6 +291,23 @@ export default function Bills() {
     setIsAddModalOpen(false);
     setEditingBill(null);
     form.reset();
+  };
+
+  const handleRecordPayment = (bill: Bill) => {
+    setSelectedBillForPayment(bill);
+    setIsRecordPaymentModalOpen(true);
+  };
+
+  const handleRecordPaymentSubmit = (data: any) => {
+    if (selectedBillForPayment) {
+      recordPaymentMutation.mutate({
+        billId: selectedBillForPayment.id,
+        amount: data.amount,
+        paidDate: data.paidDate,
+        dueDate: data.dueDate,
+        status: data.status || "paid",
+      });
+    }
   };
 
   const handleDelete = (id: string, name: string) => {
@@ -403,20 +453,257 @@ export default function Bills() {
           </div>
 
           <Tabs defaultValue="list" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="list" data-testid="tab-bills-list">
                 <Receipt className="mr-2" size={16} />
                 Bills List
+              </TabsTrigger>
+              <TabsTrigger value="monthly" data-testid="tab-bills-monthly">
+                <Calendar className="mr-2" size={16} />
+                Monthly
+              </TabsTrigger>
+              <TabsTrigger value="yearly" data-testid="tab-bills-yearly">
+                <TrendingUp className="mr-2" size={16} />
+                Yearly
               </TabsTrigger>
               <TabsTrigger value="insights" data-testid="tab-bills-insights">
                 <BarChart3 className="mr-2" size={16} />
                 Insights
               </TabsTrigger>
               <TabsTrigger value="comparison" data-testid="tab-bills-comparison">
-                <TrendingUp className="mr-2" size={16} />
+                <PieChartIcon className="mr-2" size={16} />
                 Comparison
               </TabsTrigger>
             </TabsList>
+
+            {/* Monthly Tracking Tab */}
+            <TabsContent value="monthly">
+              <div className="space-y-6">
+                {/* Year Selector */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      <span className="flex items-center">
+                        <Calendar className="mr-2" size={20} />
+                        Monthly Tracking - {selectedYear}
+                      </span>
+                      <div className="flex items-center space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedYear(selectedYear - 1)}
+                          data-testid="button-previous-year"
+                        >
+                          ←
+                        </Button>
+                        <span className="text-sm font-medium">{selectedYear}</span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedYear(selectedYear + 1)}
+                          disabled={selectedYear >= new Date().getFullYear()}
+                          data-testid="button-next-year"
+                        >
+                          →
+                        </Button>
+                      </div>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {summaryLoading ? (
+                      <div className="animate-pulse space-y-4">
+                        <div className="h-64 bg-muted rounded"></div>
+                      </div>
+                    ) : (
+                      <div className="h-80">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={summary?.monthlyTotals || []}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="monthName" />
+                            <YAxis />
+                            <Tooltip formatter={(value: number) => [formatCurrency(value), '']} />
+                            <Bar dataKey="projected" fill="#3B82F6" name="Projected" />
+                            <Bar dataKey="actual" fill="#10B981" name="Actual" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Monthly Breakdown Table */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Monthly Breakdown</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {summaryLoading ? (
+                      <div className="animate-pulse space-y-2">
+                        {Array.from({ length: 12 }).map((_, i) => (
+                          <div key={i} className="h-8 bg-muted rounded"></div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b">
+                              <th className="text-left p-3">Month</th>
+                              <th className="text-right p-3">Projected</th>
+                              <th className="text-right p-3">Actual</th>
+                              <th className="text-right p-3">Difference</th>
+                              <th className="text-right p-3">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {summary?.monthlyTotals?.map((month, index) => {
+                              const difference = month.actual - month.projected;
+                              const isOverBudget = difference > 0;
+                              const currentMonth = new Date().getMonth() + 1;
+                              const isCurrentMonth = month.month === currentMonth && selectedYear === new Date().getFullYear();
+                              const isPastMonth = selectedYear < new Date().getFullYear() || 
+                                                (selectedYear === new Date().getFullYear() && month.month < currentMonth);
+                              
+                              return (
+                                <tr key={index} className={`border-b ${isCurrentMonth ? 'bg-blue-50 dark:bg-blue-950' : ''}`}>
+                                  <td className="p-3 font-medium">{month.monthName}</td>
+                                  <td className="p-3 text-right">{formatCurrency(month.projected)}</td>
+                                  <td className="p-3 text-right">{formatCurrency(month.actual)}</td>
+                                  <td className={`p-3 text-right ${isOverBudget ? 'text-red-600' : 'text-green-600'}`}>
+                                    {difference !== 0 ? (isOverBudget ? '+' : '') + formatCurrency(difference) : '-'}
+                                  </td>
+                                  <td className="p-3 text-right">
+                                    <span className={`px-2 py-1 rounded-full text-xs ${
+                                      isCurrentMonth ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
+                                      isPastMonth ? 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200' :
+                                      'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                                    }`}>
+                                      {isCurrentMonth ? 'Current' : isPastMonth ? 'Past' : 'Future'}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            {/* Yearly Tracking Tab */}
+            <TabsContent value="yearly">
+              <div className="space-y-6">
+                {/* Annual Summary */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Annual Projection</p>
+                          <p className="text-2xl font-bold">
+                            {formatCurrency((summary?.monthlyEquivalent || 0) * 12)}
+                          </p>
+                        </div>
+                        <TrendingUp className="h-8 w-8 text-blue-500" />
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Year to Date</p>
+                          <p className="text-2xl font-bold">
+                            {formatCurrency(
+                              summary?.monthlyTotals?.slice(0, new Date().getMonth() + 1)
+                                .reduce((sum, month) => sum + month.projected, 0) || 0
+                            )}
+                          </p>
+                        </div>
+                        <CalendarDays className="h-8 w-8 text-green-500" />
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Remaining Year</p>
+                          <p className="text-2xl font-bold">
+                            {formatCurrency(
+                              summary?.monthlyTotals?.slice(new Date().getMonth() + 1)
+                                .reduce((sum, month) => sum + month.projected, 0) || 0
+                            )}
+                          </p>
+                        </div>
+                        <Clock className="h-8 w-8 text-orange-500" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Quarterly Breakdown */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <BarChart3 className="mr-2" size={20} />
+                      Quarterly Analysis
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {[
+                        { name: 'Q1', months: [0, 1, 2], color: 'bg-blue-500' },
+                        { name: 'Q2', months: [3, 4, 5], color: 'bg-green-500' },
+                        { name: 'Q3', months: [6, 7, 8], color: 'bg-orange-500' },
+                        { name: 'Q4', months: [9, 10, 11], color: 'bg-purple-500' },
+                      ].map((quarter, index) => {
+                        const total = summary?.monthlyTotals
+                          ?.filter((_, monthIndex) => quarter.months.includes(monthIndex))
+                          .reduce((sum, month) => sum + month.projected, 0) || 0;
+                        
+                        return (
+                          <div key={index} className="p-4 border rounded-lg">
+                            <div className="flex items-center justify-between mb-2">
+                              <h3 className="font-medium">{quarter.name}</h3>
+                              <div className={`w-3 h-3 rounded-full ${quarter.color}`}></div>
+                            </div>
+                            <p className="text-2xl font-bold">{formatCurrency(total)}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {quarter.months.map(m => summary?.monthlyTotals?.[m]?.monthName.slice(0, 3)).join(', ')}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Year-over-Year Comparison */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <TrendingUp className="mr-2" size={20} />
+                      Year-over-Year Comparison
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-center py-12 text-muted-foreground">
+                      <Clock className="mx-auto h-12 w-12 mb-4" />
+                      <p className="text-lg font-medium">Historical Data Coming Soon</p>
+                      <p className="text-sm">
+                        Year-over-year comparisons will appear here once you have multiple years of data.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
 
             {/* Bills List Tab */}
             <TabsContent value="list">
@@ -552,6 +839,15 @@ export default function Bills() {
                                       data-testid={`button-view-${bill.id}`}
                                     >
                                       <Eye size={16} />
+                                    </Button>
+                                    <Button 
+                                      variant="ghost"
+                                      size="sm"
+                                      title="Record Payment"
+                                      onClick={() => handleRecordPayment(bill)}
+                                      data-testid={`button-record-payment-${bill.id}`}
+                                    >
+                                      <CreditCard size={16} />
                                     </Button>
                                     <Button 
                                       variant="ghost"
@@ -791,6 +1087,130 @@ export default function Bills() {
         </div>
       </main>
 
+      {/* Record Payment Modal */}
+      <Dialog open={isRecordPaymentModalOpen} onOpenChange={setIsRecordPaymentModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record Payment - {selectedBillForPayment?.name}</DialogTitle>
+          </DialogHeader>
+          
+          <Form {...useForm({
+            resolver: zodResolver(insertBillPaymentSchema.extend({
+              amount: z.string().min(1, "Amount is required"),
+              paidDate: z.string().min(1, "Paid date is required"),
+              dueDate: z.string().min(1, "Due date is required"),
+            })),
+            defaultValues: {
+              amount: selectedBillForPayment?.amount || "",
+              paidDate: new Date().toISOString().split('T')[0],
+              dueDate: new Date().toISOString().split('T')[0],
+              status: "paid",
+            }
+          })}>
+            {(paymentForm) => (
+              <form onSubmit={paymentForm.handleSubmit(handleRecordPaymentSubmit)} className="space-y-4">
+                <FormField
+                  control={paymentForm.control}
+                  name="amount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Amount</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01" 
+                          placeholder="0.00" 
+                          {...field}
+                          data-testid="input-amount" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={paymentForm.control}
+                  name="paidDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Paid Date</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="date" 
+                          {...field}
+                          data-testid="input-paid-date" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={paymentForm.control}
+                  name="dueDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Due Date</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="date" 
+                          {...field}
+                          data-testid="input-due-date" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={paymentForm.control}
+                  name="status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Status</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-status">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="paid">Paid</SelectItem>
+                          <SelectItem value="overdue">Overdue</SelectItem>
+                          <SelectItem value="cancelled">Cancelled</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="flex justify-end space-x-2">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => setIsRecordPaymentModalOpen(false)}
+                    data-testid="button-cancel-payment"
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    disabled={recordPaymentMutation.isPending}
+                    data-testid="button-submit-payment"
+                  >
+                    {recordPaymentMutation.isPending ? "Recording..." : "Record Payment"}
+                  </Button>
+                </div>
+              </form>
+            )}
+          </Form>
+        </DialogContent>
+      </Dialog>
+
       {/* Add/Edit Bill Modal */}
       <Dialog open={isAddModalOpen} onOpenChange={handleCloseModal}>
         <DialogContent className="max-w-2xl">
@@ -824,7 +1244,7 @@ export default function Bills() {
                     <FormItem>
                       <FormLabel>Vendor/Provider</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g., BSES" {...field} data-testid="input-bill-vendor" />
+                        <Input placeholder="e.g., BSES" {...field} value={field.value || ""} data-testid="input-bill-vendor" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -943,6 +1363,7 @@ export default function Bills() {
                       <Textarea 
                         placeholder="Additional notes about this bill..." 
                         {...field} 
+                        value={field.value || ""}
                         data-testid="textarea-bill-description" 
                       />
                     </FormControl>

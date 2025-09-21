@@ -106,40 +106,170 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = "demo-user";
       const investments = await storage.getInvestments(userId);
       
+      // Calculate total invested (sum of all principal amounts)
       const totalInvested = investments.reduce((sum, inv) => {
         return sum + parseFloat(inv.principalAmount);
       }, 0);
 
-      // Calculate estimated current value (simplified calculation)
+      // Calculate estimated current value (more accurate calculation)
       const currentValue = investments.reduce((sum, inv) => {
         const principal = parseFloat(inv.principalAmount);
         const returnRate = inv.expectedReturn ? parseFloat(inv.expectedReturn) / 100 : 0.08;
-        const months = Math.max(1, Math.floor((Date.now() - new Date(inv.startDate).getTime()) / (1000 * 60 * 60 * 24 * 30)));
+        const startDate = new Date(inv.startDate);
+        const currentDate = new Date();
+        const months = Math.max(0, Math.floor((currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30)));
+        
+        // Skip future-dated investments
+        if (startDate > currentDate) return sum;
+        
+        // Simple compound interest calculation
         const estimated = principal * Math.pow(1 + returnRate/12, months);
         return sum + estimated;
       }, 0);
 
-      // Calculate upcoming due dates
+      // Calculate last month comparison for percentage change
+      const lastMonthDate = new Date();
+      lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
+      
+      const lastMonthValue = investments.reduce((sum, inv) => {
+        const principal = parseFloat(inv.principalAmount);
+        const returnRate = inv.expectedReturn ? parseFloat(inv.expectedReturn) / 100 : 0.08;
+        const startDate = new Date(inv.startDate);
+        const monthsLastMonth = Math.max(0, Math.floor((lastMonthDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30)));
+        
+        // Skip investments that didn't exist last month or are future-dated
+        if (startDate > lastMonthDate) return sum;
+        
+        const estimated = principal * Math.pow(1 + returnRate/12, monthsLastMonth);
+        return sum + estimated;
+      }, 0);
+
+      const changeVsLastMonth = lastMonthValue > 0 ? ((currentValue - lastMonthValue) / lastMonthValue * 100) : 0;
+
+      // Helper function to calculate next due date based on frequency and start cycle
+      const getNextDueDate = (investment: any, fromDate: Date) => {
+        if (!investment.dueDay || !investment.startDate) return null;
+        
+        const startDate = new Date(investment.startDate);
+        const startYear = startDate.getFullYear();
+        const startMonth = startDate.getMonth();
+        
+        // Normalize dates to day precision (remove time component)
+        const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const anchor = new Date(Math.max(startOfDay(startDate).getTime(), startOfDay(fromDate).getTime()));
+        
+        // Helper to clamp day to valid range for given month/year
+        const clampDay = (year: number, month: number, day: number) => {
+          const daysInMonth = new Date(year, month + 1, 0).getDate();
+          return Math.min(day, daysInMonth);
+        };
+        
+        // Calculate next occurrence based on frequency
+        let nextDue: Date | null = null;
+        
+        switch (investment.paymentFrequency) {
+          case 'monthly': {
+            // Find next month where due date >= anchor
+            let targetYear = anchor.getFullYear();
+            let targetMonth = anchor.getMonth();
+            
+            do {
+              const clampedDay = clampDay(targetYear, targetMonth, investment.dueDay);
+              nextDue = new Date(targetYear, targetMonth, clampedDay);
+              
+              if (nextDue >= anchor) break;
+              
+              targetMonth++;
+              if (targetMonth > 11) {
+                targetMonth = 0;
+                targetYear++;
+              }
+            } while (true);
+            break;
+          }
+          
+          case 'quarterly': {
+            // Find next quarter cycle from start month
+            let k = 0;
+            do {
+              const targetMonth = (startMonth + k * 3) % 12;
+              const targetYear = startYear + Math.floor((startMonth + k * 3) / 12);
+              const clampedDay = clampDay(targetYear, targetMonth, investment.dueDay);
+              nextDue = new Date(targetYear, targetMonth, clampedDay);
+              
+              if (nextDue >= anchor) break;
+              k++;
+            } while (k < 100); // Safety limit
+            break;
+          }
+          
+          case 'half_yearly': {
+            // Find next half-year cycle from start month
+            let k = 0;
+            do {
+              const targetMonth = (startMonth + k * 6) % 12;
+              const targetYear = startYear + Math.floor((startMonth + k * 6) / 12);
+              const clampedDay = clampDay(targetYear, targetMonth, investment.dueDay);
+              nextDue = new Date(targetYear, targetMonth, clampedDay);
+              
+              if (nextDue >= anchor) break;
+              k++;
+            } while (k < 50); // Safety limit
+            break;
+          }
+          
+          case 'yearly': {
+            // Find next year cycle from start date
+            let targetYear = startYear;
+            do {
+              const clampedDay = clampDay(targetYear, startMonth, investment.dueDay);
+              nextDue = new Date(targetYear, startMonth, clampedDay);
+              
+              if (nextDue >= anchor) break;
+              targetYear++;
+            } while (targetYear < startYear + 50); // Safety limit
+            break;
+          }
+          
+          default:
+            return null;
+        }
+        
+        return nextDue;
+      };
+
+      // Calculate upcoming payments with amounts
       const today = new Date();
       const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
       
       const upcomingPayments = investments.filter(inv => {
-        if (inv.paymentFrequency === 'one_time' || !inv.dueDay) return false;
+        if (inv.paymentFrequency === 'one_time' || !inv.dueDay || !inv.isActive) return false;
         
-        const dueDate = new Date(today.getFullYear(), today.getMonth(), inv.dueDay);
-        if (dueDate < today) {
-          dueDate.setMonth(dueDate.getMonth() + 1);
-        }
-        
-        return dueDate <= nextWeek;
-      });
+        const nextDue = getNextDueDate(inv, today);
+        return nextDue && nextDue <= nextWeek;
+      }).map(inv => ({
+        ...inv,
+        nextDueDate: getNextDueDate(inv, today)
+      }));
+
+      // Find next payment details
+      const nextPayment = upcomingPayments.length > 0 ? 
+        upcomingPayments.sort((a, b) => {
+          return (a.nextDueDate?.getTime() || 0) - (b.nextDueDate?.getTime() || 0);
+        })[0] : null;
+
+      const nextPaymentDate = nextPayment?.nextDueDate;
 
       res.json({
         totalInvested: Math.round(totalInvested),
         currentValue: Math.round(currentValue),
         totalGains: Math.round(currentValue - totalInvested),
         gainsPercentage: totalInvested > 0 ? ((currentValue - totalInvested) / totalInvested * 100) : 0,
-        upcomingPayments: upcomingPayments.length
+        changeVsLastMonth: Math.round(changeVsLastMonth * 100) / 100, // Round to 2 decimal places
+        upcomingPayments: upcomingPayments.length,
+        nextPaymentAmount: nextPayment ? parseFloat(nextPayment.principalAmount) : null,
+        nextPaymentDate: nextPaymentDate ? nextPaymentDate.getDate() : null,
+        nextPaymentName: nextPayment ? nextPayment.name : null
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch dashboard summary" });
@@ -163,6 +293,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/bills/summary", async (req, res) => {
     try {
       const userId = "demo-user";
+      const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
       const bills = await storage.getBills(userId);
       
       const totalMonthlyBills = bills
@@ -195,6 +326,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return dueDate <= nextWeek;
       });
 
+      // Generate monthly breakdown for the year with actual payments
+      const monthlyTotals = await Promise.all(
+        Array.from({ length: 12 }, async (_, monthIndex) => {
+          let projected = 0;
+          let actual = 0;
+          
+          // Calculate projected amounts with proper cycle anchoring
+          bills.filter(bill => bill.isActive).forEach(bill => {
+            const amount = parseFloat(bill.amount);
+            
+            if (bill.frequency === 'monthly') {
+              projected += amount;
+            } else if (bill.frequency === 'quarterly') {
+              // Use nextDueDate or creation date as anchor, bill occurs every 3 months
+              const anchorDate = bill.nextDueDate ? new Date(bill.nextDueDate) : new Date(bill.createdAt);
+              const anchorMonth = anchorDate.getMonth();
+              
+              // Check if this month falls on a quarterly cycle from anchor
+              const monthsFromAnchor = (monthIndex - anchorMonth + 12) % 12;
+              if (monthsFromAnchor % 3 === 0) {
+                projected += amount;
+              }
+            } else if (bill.frequency === 'yearly') {
+              // Use nextDueDate or creation date as anchor, bill occurs once per year
+              const anchorDate = bill.nextDueDate ? new Date(bill.nextDueDate) : new Date(bill.createdAt);
+              const anchorMonth = anchorDate.getMonth();
+              
+              if (monthIndex === anchorMonth) {
+                projected += amount;
+              }
+            } else if (bill.frequency === 'half_yearly') {
+              // Use nextDueDate or creation date as anchor, bill occurs every 6 months
+              const anchorDate = bill.nextDueDate ? new Date(bill.nextDueDate) : new Date(bill.createdAt);
+              const anchorMonth = anchorDate.getMonth();
+              
+              // Check if this month falls on a half-yearly cycle from anchor
+              const monthsFromAnchor = (monthIndex - anchorMonth + 12) % 12;
+              if (monthsFromAnchor % 6 === 0) {
+                projected += amount;
+              }
+            }
+          });
+          
+          // Calculate actual payments for this month
+          for (const bill of bills) {
+            const payments = await storage.getBillPayments(bill.id);
+            const monthPayments = payments.filter(payment => {
+              const paymentDate = new Date(payment.paidDate);
+              return paymentDate.getFullYear() === year && paymentDate.getMonth() === monthIndex;
+            });
+            actual += monthPayments.reduce((sum, payment) => sum + parseFloat(payment.amount), 0);
+          }
+          
+          return {
+            month: monthIndex + 1,
+            monthName: new Date(year, monthIndex).toLocaleString('default', { month: 'long' }),
+            projected: Math.round(projected),
+            actual: Math.round(actual)
+          };
+        })
+      );
+
       // Category breakdown
       const categoryBreakdown = bills
         .filter(bill => bill.isActive)
@@ -220,7 +413,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         monthlyEquivalent: Math.round(monthlyEquivalent),
         billsDueThisWeek: billsDueThisWeek.length,
         activeBillsCount: bills.filter(bill => bill.isActive).length,
-        categoryBreakdown
+        categoryBreakdown,
+        monthlyTotals,
+        year
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch bills summary" });
@@ -237,6 +432,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(bill);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch bill" });
+    }
+  });
+
+  // Get bill payments for a specific bill
+  app.get("/api/bills/:id/payments", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const payments = await storage.getBillPayments(id);
+      res.json(payments);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch bill payments" });
+    }
+  });
+
+  // Create a bill payment
+  app.post("/api/bills/:id/payments", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const paymentData = insertBillPaymentSchema.parse({
+        ...req.body,
+        billId: id, // Override any billId from body with URL param
+      });
+      const payment = await storage.createBillPayment(paymentData);
+      res.status(201).json(payment);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid payment data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create payment" });
+    }
+  });
+
+  // Get all bill payments for a year (for summary calculations)
+  app.get("/api/bills/payments", async (req, res) => {
+    try {
+      const userId = "demo-user";
+      const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
+      
+      const bills = await storage.getBills(userId);
+      const allPayments: any[] = [];
+      
+      for (const bill of bills) {
+        const payments = await storage.getBillPayments(bill.id);
+        const yearPayments = payments.filter(payment => {
+          const paymentYear = new Date(payment.paidDate).getFullYear();
+          return paymentYear === year;
+        });
+        
+        yearPayments.forEach(payment => {
+          allPayments.push({
+            ...payment,
+            billName: bill.name,
+            category: bill.category
+          });
+        });
+      }
+      
+      res.json(allPayments);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch payments" });
     }
   });
 

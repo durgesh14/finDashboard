@@ -16,7 +16,7 @@ export const investments = pgTable("investments", {
   type: text("type").notNull(), // 'mutual_fund', 'fixed_deposit', 'recurring_deposit', 'lic', 'ppf', 'stocks', 'other'
   principalAmount: decimal("principal_amount", { precision: 15, scale: 2 }).notNull(),
   startDate: date("start_date").notNull(),
-  paymentFrequency: text("payment_frequency").notNull(), // 'monthly', 'quarterly', 'yearly', 'one_time'
+  paymentFrequency: text("payment_frequency").notNull(), // 'monthly', 'quarterly', 'half_yearly', 'yearly', 'one_time'
   dueDay: integer("due_day"), // 1-31, null for one-time
   maturityDate: date("maturity_date"),
   expectedReturn: decimal("expected_return", { precision: 5, scale: 2 }), // percentage
@@ -74,6 +74,8 @@ export const insertInvestmentSchema = createInsertSchema(investments).omit({
   userId: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  paymentFrequency: z.enum(['monthly', 'quarterly', 'half_yearly', 'yearly', 'one_time']),
 });
 
 export const insertTransactionSchema = createInsertSchema(transactions).omit({

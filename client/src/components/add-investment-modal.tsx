@@ -31,7 +31,7 @@ export function AddInvestmentModal({ open, onOpenChange, editingInvestment }: Ad
       type: "",
       principalAmount: "0",
       startDate: "",
-      paymentFrequency: "",
+      paymentFrequency: "monthly",
       dueDay: null,
       maturityDate: null,
       expectedReturn: null,
@@ -47,7 +47,7 @@ export function AddInvestmentModal({ open, onOpenChange, editingInvestment }: Ad
         type: editingInvestment.type,
         principalAmount: editingInvestment.principalAmount,
         startDate: editingInvestment.startDate,
-        paymentFrequency: editingInvestment.paymentFrequency,
+        paymentFrequency: editingInvestment.paymentFrequency as "monthly" | "quarterly" | "half_yearly" | "yearly" | "one_time",
         dueDay: editingInvestment.dueDay,
         maturityDate: editingInvestment.maturityDate,
         expectedReturn: editingInvestment.expectedReturn,
@@ -59,7 +59,7 @@ export function AddInvestmentModal({ open, onOpenChange, editingInvestment }: Ad
         type: "",
         principalAmount: "0",
         startDate: "",
-        paymentFrequency: "",
+        paymentFrequency: "monthly",
         dueDay: null,
         maturityDate: null,
         expectedReturn: null,
@@ -183,7 +183,7 @@ export function AddInvestmentModal({ open, onOpenChange, editingInvestment }: Ad
             <div>
               <Label htmlFor="paymentFrequency">Payment Frequency</Label>
               <Select 
-                onValueChange={(value) => form.setValue("paymentFrequency", value)}
+                onValueChange={(value) => form.setValue("paymentFrequency", value as "monthly" | "quarterly" | "half_yearly" | "yearly" | "one_time")}
                 value={form.watch("paymentFrequency")}
               >
                 <SelectTrigger data-testid="select-payment-frequency">
@@ -192,6 +192,7 @@ export function AddInvestmentModal({ open, onOpenChange, editingInvestment }: Ad
                 <SelectContent>
                   <SelectItem value="monthly">Monthly</SelectItem>
                   <SelectItem value="quarterly">Quarterly</SelectItem>
+                  <SelectItem value="half_yearly">Half-yearly</SelectItem>
                   <SelectItem value="yearly">Yearly</SelectItem>
                   <SelectItem value="one_time">One-time</SelectItem>
                 </SelectContent>
