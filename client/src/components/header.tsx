@@ -1,6 +1,15 @@
 import { Bell, ChartLine, User } from "lucide-react";
+import { Link, useLocation } from "wouter";
 
 export function Header() {
+  const [location] = useLocation();
+  
+  const isActive = (path: string) => {
+    if (path === "/" && location === "/") return true;
+    if (path !== "/" && location.startsWith(path)) return true;
+    return false;
+  };
+
   return (
     <header className="bg-card border-b border-border shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -9,19 +18,29 @@ export function Header() {
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
               <ChartLine className="text-primary-foreground text-sm" size={16} />
             </div>
-            <h1 className="text-xl font-semibold text-foreground">WealthTrack</h1>
+            <Link href="/">
+              <h1 className="text-xl font-semibold text-foreground cursor-pointer">WealthTrack</h1>
+            </Link>
           </div>
           
           <nav className="hidden md:flex space-x-6">
-            <a href="#" className="text-primary font-medium border-b-2 border-primary pb-4" data-testid="nav-dashboard">
+            <Link 
+              href="/" 
+              className={`${isActive("/") ? "text-primary font-medium border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"} transition-colors pb-4`}
+              data-testid="nav-dashboard"
+            >
               Dashboard
-            </a>
+            </Link>
             <a href="#" className="text-muted-foreground hover:text-foreground transition-colors pb-4" data-testid="nav-investments">
               Investments
             </a>
-            <a href="#" className="text-muted-foreground hover:text-foreground transition-colors pb-4" data-testid="nav-reports">
+            <Link 
+              href="/reports" 
+              className={`${isActive("/reports") ? "text-primary font-medium border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"} transition-colors pb-4`}
+              data-testid="nav-reports"
+            >
               Reports
-            </a>
+            </Link>
             <a href="#" className="text-muted-foreground hover:text-foreground transition-colors pb-4" data-testid="nav-settings">
               Settings
             </a>
