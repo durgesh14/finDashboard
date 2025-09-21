@@ -114,17 +114,109 @@ export function InvestmentTable({ onEditInvestment }: InvestmentTableProps) {
   };
 
   const getNextPaymentDate = (investment: Investment) => {
-    if (investment.paymentFrequency === 'one_time' || !investment.dueDay) {
+    if (investment.paymentFrequency === 'one_time' || !investment.dueDay || !investment.startDate) {
       return 'One-time';
     }
     
     const today = new Date();
-    const nextPayment = new Date(today.getFullYear(), today.getMonth(), investment.dueDay);
-    if (nextPayment < today) {
-      nextPayment.setMonth(nextPayment.getMonth() + 1);
+    const startDate = new Date(investment.startDate);
+    const startYear = startDate.getFullYear();
+    const startMonth = startDate.getMonth();
+    
+    // Normalize dates to day precision (remove time component)
+    const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const anchor = new Date(Math.max(startOfDay(startDate).getTime(), startOfDay(today).getTime()));
+    
+    // Helper to clamp day to valid range for given month/year
+    const clampDay = (year: number, month: number, day: number) => {
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      return Math.min(day, daysInMonth);
+    };
+    
+    // Calculate next occurrence based on frequency
+    let nextDue: Date | null = null;
+    
+    switch (investment.paymentFrequency) {
+      case 'monthly': {
+        // Find next month where due date >= anchor
+        let targetYear = anchor.getFullYear();
+        let targetMonth = anchor.getMonth();
+        
+        do {
+          const clampedDay = clampDay(targetYear, targetMonth, investment.dueDay);
+          nextDue = new Date(targetYear, targetMonth, clampedDay);
+          
+          if (nextDue >= anchor) break;
+          
+          targetMonth++;
+          if (targetMonth > 11) {
+            targetMonth = 0;
+            targetYear++;
+          }
+        } while (true);
+        break;
+      }
+      
+      case 'quarterly': {
+        // Find next quarter cycle from start month
+        let k = 0;
+        do {
+          const targetMonth = (startMonth + k * 3) % 12;
+          const targetYear = startYear + Math.floor((startMonth + k * 3) / 12);
+          const clampedDay = clampDay(targetYear, targetMonth, investment.dueDay);
+          nextDue = new Date(targetYear, targetMonth, clampedDay);
+          
+          if (nextDue >= anchor) break;
+          k++;
+        } while (k < 100); // Safety limit
+        break;
+      }
+      
+      case 'half_yearly': {
+        // Find next half-year cycle from start month
+        let k = 0;
+        do {
+          const targetMonth = (startMonth + k * 6) % 12;
+          const targetYear = startYear + Math.floor((startMonth + k * 6) / 12);
+          const clampedDay = clampDay(targetYear, targetMonth, investment.dueDay);
+          nextDue = new Date(targetYear, targetMonth, clampedDay);
+          
+          if (nextDue >= anchor) break;
+          k++;
+        } while (k < 50); // Safety limit
+        break;
+      }
+      
+      case 'yearly': {
+        // Find next year cycle from start date
+        let targetYear = startYear;
+        do {
+          const clampedDay = clampDay(targetYear, startMonth, investment.dueDay);
+          nextDue = new Date(targetYear, startMonth, clampedDay);
+          
+          if (nextDue >= anchor) break;
+          targetYear++;
+        } while (targetYear < startYear + 50); // Safety limit
+        break;
+      }
+      
+      default:
+        return 'Unknown';
     }
     
-    return nextPayment.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    if (!nextDue) return 'Error';
+    
+    // Check if investment has ended/matured
+    if (investment.maturityDate && nextDue > new Date(investment.maturityDate)) {
+      return 'Matured';
+    }
+    
+    // Check if investment is inactive
+    if (!investment.isActive) {
+      return 'Inactive';
+    }
+    
+    return nextDue.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
   const getStatusBadge = (investment: Investment) => {

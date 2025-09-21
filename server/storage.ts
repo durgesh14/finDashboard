@@ -16,6 +16,7 @@ export interface IStorage {
 
   // Transaction methods
   getTransactions(investmentId: string): Promise<Transaction[]>;
+  getAllTransactionsForUser(userId: string): Promise<Transaction[]>;
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
   deleteTransaction(id: string): Promise<boolean>;
 
@@ -113,6 +114,15 @@ export class MemStorage implements IStorage {
   async getTransactions(investmentId: string): Promise<Transaction[]> {
     return Array.from(this.transactions.values()).filter(
       (transaction) => transaction.investmentId === investmentId
+    );
+  }
+
+  async getAllTransactionsForUser(userId: string): Promise<Transaction[]> {
+    const userInvestments = await this.getInvestments(userId);
+    const investmentIds = new Set(userInvestments.map(inv => inv.id));
+    
+    return Array.from(this.transactions.values()).filter(
+      (transaction) => investmentIds.has(transaction.investmentId)
     );
   }
 

@@ -127,24 +127,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return sum + estimated;
       }, 0);
 
-      // Calculate last month comparison for percentage change
-      const lastMonthDate = new Date();
-      lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
+      // Calculate month-over-month change using transaction history when available
+      const now = new Date();
+      const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
       
-      const lastMonthValue = investments.reduce((sum, inv) => {
-        const principal = parseFloat(inv.principalAmount);
-        const returnRate = inv.expectedReturn ? parseFloat(inv.expectedReturn) / 100 : 0.08;
-        const startDate = new Date(inv.startDate);
-        const monthsLastMonth = Math.max(0, Math.floor((lastMonthDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30)));
+      // Get all transactions for the user
+      const allTransactions = await storage.getAllTransactionsForUser(userId);
+      
+      let finalCurrentTotal: number;
+      let finalLastMonthTotal: number;
+      
+      // Use transaction data if any transactions exist, otherwise fallback to investment principals
+      if (allTransactions.length > 0) {
+        // Calculate total invested from transaction history (assumes deposits are positive amounts)
+        finalCurrentTotal = allTransactions
+          .filter(tx => new Date(tx.transactionDate) <= now)
+          .reduce((sum, tx) => sum + parseFloat(tx.amount), 0);
         
-        // Skip investments that didn't exist last month or are future-dated
-        if (startDate > lastMonthDate) return sum;
-        
-        const estimated = principal * Math.pow(1 + returnRate/12, monthsLastMonth);
-        return sum + estimated;
-      }, 0);
-
-      const changeVsLastMonth = lastMonthValue > 0 ? ((currentValue - lastMonthValue) / lastMonthValue * 100) : 0;
+        finalLastMonthTotal = allTransactions
+          .filter(tx => new Date(tx.transactionDate) <= endOfLastMonth)
+          .reduce((sum, tx) => sum + parseFloat(tx.amount), 0);
+      } else {
+        // Fallback to investment principal amounts with proper time boundaries
+        finalCurrentTotal = totalInvested;
+        finalLastMonthTotal = investments
+          .filter(inv => new Date(inv.startDate) <= endOfLastMonth)
+          .reduce((sum, inv) => sum + parseFloat(inv.principalAmount), 0);
+      }
+      
+      // Calculate month-over-month percentage change (as of now vs end of last month)
+      const changeVsLastMonth = finalLastMonthTotal > 0 ? 
+        ((finalCurrentTotal - finalLastMonthTotal) / finalLastMonthTotal * 100) : 
+        null; // Return null when no baseline exists for proper UI handling
 
       // Helper function to calculate next due date based on frequency and start cycle
       const getNextDueDate = (investment: any, fromDate: Date) => {
@@ -265,7 +279,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         currentValue: Math.round(currentValue),
         totalGains: Math.round(currentValue - totalInvested),
         gainsPercentage: totalInvested > 0 ? ((currentValue - totalInvested) / totalInvested * 100) : 0,
-        changeVsLastMonth: Math.round(changeVsLastMonth * 100) / 100, // Round to 2 decimal places
+        changeVsLastMonth: changeVsLastMonth !== null ? Math.round(changeVsLastMonth * 100) / 100 : null,
         upcomingPayments: upcomingPayments.length,
         nextPaymentAmount: nextPayment ? parseFloat(nextPayment.principalAmount) : null,
         nextPaymentDate: nextPaymentDate ? nextPaymentDate.getDate() : null,

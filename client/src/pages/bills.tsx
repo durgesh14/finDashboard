@@ -19,6 +19,7 @@ import {
   Trash2, 
   Eye,
   Calendar,
+  CalendarDays,
   DollarSign,
   AlertCircle,
   Clock,
@@ -247,6 +248,22 @@ export default function Bills() {
     },
   });
 
+  const paymentFormSchema = insertBillPaymentSchema.extend({
+    amount: z.string().min(1, "Amount is required"),
+    paidDate: z.string().min(1, "Paid date is required"),
+    dueDate: z.string().min(1, "Due date is required"),
+  });
+
+  const paymentForm = useForm<z.infer<typeof paymentFormSchema>>({
+    resolver: zodResolver(paymentFormSchema),
+    defaultValues: {
+      amount: "",
+      paidDate: new Date().toISOString().split('T')[0],
+      dueDate: new Date().toISOString().split('T')[0],
+      status: "paid",
+    },
+  });
+
   const formatCurrency = (amount: string | number) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
@@ -293,12 +310,24 @@ export default function Bills() {
     form.reset();
   };
 
+  const handleClosePaymentModal = () => {
+    setIsRecordPaymentModalOpen(false);
+    setSelectedBillForPayment(null);
+    paymentForm.reset();
+  };
+
   const handleRecordPayment = (bill: Bill) => {
     setSelectedBillForPayment(bill);
+    paymentForm.reset({
+      amount: bill.amount,
+      paidDate: new Date().toISOString().split('T')[0],
+      dueDate: new Date().toISOString().split('T')[0],
+      status: "paid",
+    });
     setIsRecordPaymentModalOpen(true);
   };
 
-  const handleRecordPaymentSubmit = (data: any) => {
+  const handleRecordPaymentSubmit = (data: z.infer<typeof paymentFormSchema>) => {
     if (selectedBillForPayment) {
       recordPaymentMutation.mutate({
         billId: selectedBillForPayment.id,
@@ -1088,27 +1117,14 @@ export default function Bills() {
       </main>
 
       {/* Record Payment Modal */}
-      <Dialog open={isRecordPaymentModalOpen} onOpenChange={setIsRecordPaymentModalOpen}>
+      <Dialog open={isRecordPaymentModalOpen} onOpenChange={handleClosePaymentModal}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Record Payment - {selectedBillForPayment?.name}</DialogTitle>
           </DialogHeader>
           
-          <Form {...useForm({
-            resolver: zodResolver(insertBillPaymentSchema.extend({
-              amount: z.string().min(1, "Amount is required"),
-              paidDate: z.string().min(1, "Paid date is required"),
-              dueDate: z.string().min(1, "Due date is required"),
-            })),
-            defaultValues: {
-              amount: selectedBillForPayment?.amount || "",
-              paidDate: new Date().toISOString().split('T')[0],
-              dueDate: new Date().toISOString().split('T')[0],
-              status: "paid",
-            }
-          })}>
-            {(paymentForm) => (
-              <form onSubmit={paymentForm.handleSubmit(handleRecordPaymentSubmit)} className="space-y-4">
+          <Form {...paymentForm}>
+            <form onSubmit={paymentForm.handleSubmit(handleRecordPaymentSubmit)} className="space-y-4">
                 <FormField
                   control={paymentForm.control}
                   name="amount"
@@ -1188,25 +1204,24 @@ export default function Bills() {
                   )}
                 />
 
-                <div className="flex justify-end space-x-2">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={() => setIsRecordPaymentModalOpen(false)}
-                    data-testid="button-cancel-payment"
-                  >
-                    Cancel
-                  </Button>
-                  <Button 
-                    type="submit" 
-                    disabled={recordPaymentMutation.isPending}
-                    data-testid="button-submit-payment"
-                  >
-                    {recordPaymentMutation.isPending ? "Recording..." : "Record Payment"}
-                  </Button>
-                </div>
-              </form>
-            )}
+              <div className="flex justify-end space-x-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={handleClosePaymentModal}
+                  data-testid="button-cancel-payment"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={recordPaymentMutation.isPending}
+                  data-testid="button-submit-payment"
+                >
+                  {recordPaymentMutation.isPending ? "Recording..." : "Record Payment"}
+                </Button>
+              </div>
+            </form>
           </Form>
         </DialogContent>
       </Dialog>

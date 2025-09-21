@@ -57,11 +57,17 @@ export function DashboardSummary() {
             </div>
           </div>
           <div className="flex items-center mt-4 text-sm">
-            <ArrowUp className={`${summary?.changeVsLastMonth !== undefined && summary.changeVsLastMonth >= 0 ? 'text-green-500' : 'text-red-500'} mr-1`} size={16} />
-            <span className={`${summary?.changeVsLastMonth !== undefined && summary.changeVsLastMonth >= 0 ? 'text-green-500' : 'text-red-500'} font-medium`}>
-              {summary?.changeVsLastMonth !== undefined && summary.changeVsLastMonth >= 0 ? '+' : ''}{summary?.changeVsLastMonth?.toFixed(1) || '0.0'}%
-            </span>
-            <span className="text-muted-foreground ml-2">vs last month</span>
+            {summary?.changeVsLastMonth !== null && summary?.changeVsLastMonth !== undefined ? (
+              <>
+                <ArrowUp className={`${summary.changeVsLastMonth >= 0 ? 'text-green-500' : 'text-red-500'} mr-1`} size={16} />
+                <span className={`${summary.changeVsLastMonth >= 0 ? 'text-green-500' : 'text-red-500'} font-medium`}>
+                  {summary.changeVsLastMonth >= 0 ? '+' : ''}{summary.changeVsLastMonth.toFixed(1)}%
+                </span>
+                <span className="text-muted-foreground ml-2">vs last month</span>
+              </>
+            ) : (
+              <span className="text-muted-foreground">No previous month data</span>
+            )}
           </div>
         </CardContent>
       </Card>
