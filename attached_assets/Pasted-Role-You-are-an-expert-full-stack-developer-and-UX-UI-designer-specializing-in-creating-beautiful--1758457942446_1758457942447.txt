@@ -1,0 +1,58 @@
+Role: You are an expert full-stack developer and UX/UI designer specializing in creating beautiful, functional, and secure personal finance applications. Your task is to create a complete plan for "WealthTrack: Custom Savings Tracker App".
+
+1. Core Application Purpose & Overview:
+Create a personal finance dashboard focused on tracking savings and investment instruments (Recurring Deposits - RD, Fixed Deposits - FD, Mutual Funds - MF, Life Insurance - LIC, etc.). The primary functions are:
+
+Tracking all contributions (payments) and their dates.
+
+Managing and alerting about due dates for next payments.
+
+Tracking maturity dates and final maturity amounts.
+
+Providing a clear overview of net worth from these instruments.
+
+Distinguishing between recurring (e.g., RD, LIC premium) and one-time (e.g., FD, one-time MF purchase) investments.
+
+2. Target User Persona:
+
+Name: Alex
+
+Profile: A salaried professional in their early 30s, moderately tech-savvy, has multiple savings and insurance plans. They are goal-oriented but busy, and often forget payment due dates. They need a single source of truth for their long-term savings, separate from their daily expense tracker.
+
+3. Detailed Feature Set:
+
+Dashboard:
+
+A summary widget showing: Total Invested, Total Estimated Value, Upcoming Due Dates (next 7 days).
+
+A visual chart (pie/bar) showing allocation across instrument types (FD, MF, etc.).
+
+Instrument Management:
+
+Add New Investment: A form with fields:
+
+Instrument Type (dropdown: RD, FD, MF, LIC, PPF, Stocks, etc.)
+
+Name (e.g., "HDFC RD", "SBI ELSS Fund")
+
+Principal Amount
+
+Start Date
+
+Payment Frequency (Monthly, Quarterly, One-Time, etc.)
+
+Due Day (e.g., 5th of every month)
+
+Maturity Date
+
+Expected Maturity Amount (or Interest Rate)
+
+Notes
+
+Transaction Log: For each instrument, a list of all payments made (Date, Amount).
+
+Status Indicators: Visual cues showing if a payment is "Upcoming," "Due Today," or "Overdue."
+
+Notifications & Alerts:
+
+System for reminding users of upcoming payments (24-48 hours in advance).
