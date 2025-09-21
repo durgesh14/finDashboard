@@ -104,7 +104,7 @@ export function InvestmentTable({ onEditInvestment }: InvestmentTableProps) {
     const principal = parseFloat(investment.principalAmount);
     const returnRate = investment.expectedReturn ? parseFloat(investment.expectedReturn) / 100 : 0.08;
     const months = Math.max(1, Math.floor((Date.now() - new Date(investment.startDate).getTime()) / (1000 * 60 * 60 * 24 * 30)));
-    return principal * (1 + (returnRate * months / 12));
+    return principal * Math.pow(1 + returnRate/12, months);
   };
 
   const calculateReturns = (investment: Investment) => {

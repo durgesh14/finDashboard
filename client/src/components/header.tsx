@@ -31,9 +31,20 @@ export function Header() {
             >
               Dashboard
             </Link>
-            <a href="#" className="text-muted-foreground hover:text-foreground transition-colors pb-4" data-testid="nav-investments">
+            <Link 
+              href="/investments" 
+              className={`${isActive("/investments") ? "text-primary font-medium border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"} transition-colors pb-4`}
+              data-testid="nav-investments"
+            >
               Investments
-            </a>
+            </Link>
+            <Link 
+              href="/bills" 
+              className={`${isActive("/bills") ? "text-primary font-medium border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"} transition-colors pb-4`}
+              data-testid="nav-bills"
+            >
+              Bills
+            </Link>
             <Link 
               href="/reports" 
               className={`${isActive("/reports") ? "text-primary font-medium border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"} transition-colors pb-4`}
@@ -41,9 +52,13 @@ export function Header() {
             >
               Reports
             </Link>
-            <a href="#" className="text-muted-foreground hover:text-foreground transition-colors pb-4" data-testid="nav-settings">
+            <Link 
+              href="/settings" 
+              className={`${isActive("/settings") ? "text-primary font-medium border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"} transition-colors pb-4`}
+              data-testid="nav-settings"
+            >
               Settings
-            </a>
+            </Link>
           </nav>
           
           <div className="flex items-center space-x-4">

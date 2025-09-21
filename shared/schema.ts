@@ -35,6 +35,35 @@ export const transactions = pgTable("transactions", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const bills = pgTable("bills", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  name: text("name").notNull(),
+  category: text("category").notNull(), // 'utilities', 'subscriptions', 'insurance', 'loans', 'groceries', 'transport', 'healthcare', 'entertainment', 'other'
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  frequency: text("frequency").notNull(), // 'monthly', 'quarterly', 'yearly', 'one_time'
+  dueDay: integer("due_day"), // 1-31, null for one-time
+  nextDueDate: date("next_due_date"),
+  description: text("description"),
+  vendor: text("vendor"), // company/service provider
+  isActive: boolean("is_active").default(true).notNull(),
+  isRecurring: boolean("is_recurring").default(true).notNull(),
+  reminderDays: integer("reminder_days").default(3), // days before due date to remind
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const billPayments = pgTable("bill_payments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  billId: varchar("bill_id").notNull(),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  paidDate: date("paid_date").notNull(),
+  dueDate: date("due_date").notNull(),
+  status: text("status").notNull().default("paid"), // 'paid', 'overdue', 'cancelled'
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -52,9 +81,25 @@ export const insertTransactionSchema = createInsertSchema(transactions).omit({
   createdAt: true,
 });
 
+export const insertBillSchema = createInsertSchema(bills).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertBillPaymentSchema = createInsertSchema(billPayments).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type Investment = typeof investments.$inferSelect;
 export type InsertInvestment = z.infer<typeof insertInvestmentSchema>;
 export type Transaction = typeof transactions.$inferSelect;
 export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
+export type Bill = typeof bills.$inferSelect;
+export type InsertBill = z.infer<typeof insertBillSchema>;
+export type BillPayment = typeof billPayments.$inferSelect;
+export type InsertBillPayment = z.infer<typeof insertBillPaymentSchema>;

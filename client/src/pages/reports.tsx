@@ -79,7 +79,7 @@ export default function Reports() {
       const principal = parseFloat(investment.principalAmount);
       const returnRate = investment.expectedReturn ? parseFloat(investment.expectedReturn) / 100 : 0.08;
       const months = Math.max(1, Math.floor((Date.now() - new Date(investment.startDate).getTime()) / (1000 * 60 * 60 * 24 * 30)));
-      const currentValue = principal * (1 + (returnRate * months / 12));
+      const currentValue = principal * Math.pow(1 + returnRate/12, months);
       const gains = currentValue - principal;
       const gainsPercentage = (gains / principal) * 100;
 
@@ -157,7 +157,7 @@ export default function Reports() {
         const principal = parseFloat(inv.principalAmount);
         const returnRate = inv.expectedReturn ? parseFloat(inv.expectedReturn) / 100 : 0.08;
         const monthsElapsed = Math.max(1, Math.floor((month.getTime() - new Date(inv.startDate).getTime()) / (1000 * 60 * 60 * 24 * 30)));
-        return sum + (principal * (1 + (returnRate * monthsElapsed / 12)));
+        return sum + (principal * Math.pow(1 + returnRate/12, monthsElapsed));
       }, 0);
 
       trends.push({
