@@ -41,9 +41,10 @@ export const bills = pgTable("bills", {
   name: text("name").notNull(),
   category: text("category").notNull(), // 'utilities', 'subscriptions', 'insurance', 'loans', 'groceries', 'transport', 'healthcare', 'entertainment', 'other'
   amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
-  frequency: text("frequency").notNull(), // 'monthly', 'quarterly', 'yearly', 'one_time'
+  frequency: text("frequency").notNull(), // 'monthly', 'quarterly', 'half_yearly', 'yearly', 'one_time'
   dueDay: integer("due_day"), // 1-31, null for one-time
   nextDueDate: date("next_due_date"),
+  lastPaidDate: date("last_paid_date"), // track when bill was last paid
   description: text("description"),
   vendor: text("vendor"), // company/service provider
   isActive: boolean("is_active").default(true).notNull(),
@@ -93,6 +94,10 @@ export const insertBillSchema = createInsertSchema(bills).omit({
 export const insertBillPaymentSchema = createInsertSchema(billPayments).omit({
   id: true,
   createdAt: true,
+}).extend({
+  amount: z.coerce.number().positive("Amount must be positive"),
+  paidDate: z.string().min(1, "Paid date is required"),
+  dueDate: z.string().min(1, "Due date is required"),
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;

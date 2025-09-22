@@ -133,7 +133,7 @@ export default function Bills() {
   });
 
   const recordPaymentMutation = useMutation({
-    mutationFn: (data: { billId: string; amount: string; paidDate: string; dueDate: string; status: string }) =>
+    mutationFn: (data: { billId: string; amount: number; paidDate: string; dueDate: string; status: string }) =>
       apiRequest("POST", `/api/bills/${data.billId}/payments`, {
         amount: data.amount,
         paidDate: data.paidDate,
@@ -248,16 +248,13 @@ export default function Bills() {
     },
   });
 
-  const paymentFormSchema = insertBillPaymentSchema.extend({
-    amount: z.string().min(1, "Amount is required"),
-    paidDate: z.string().min(1, "Paid date is required"),
-    dueDate: z.string().min(1, "Due date is required"),
-  });
+  const paymentFormSchema = insertBillPaymentSchema;
 
   const paymentForm = useForm<z.infer<typeof paymentFormSchema>>({
     resolver: zodResolver(paymentFormSchema),
     defaultValues: {
-      amount: "",
+      amount: 0,
+      billId: "",
       paidDate: new Date().toISOString().split('T')[0],
       dueDate: new Date().toISOString().split('T')[0],
       status: "paid",
@@ -319,7 +316,8 @@ export default function Bills() {
   const handleRecordPayment = (bill: Bill) => {
     setSelectedBillForPayment(bill);
     paymentForm.reset({
-      amount: bill.amount,
+      amount: parseFloat(bill.amount),
+      billId: bill.id,
       paidDate: new Date().toISOString().split('T')[0],
       dueDate: new Date().toISOString().split('T')[0],
       status: "paid",
@@ -328,15 +326,13 @@ export default function Bills() {
   };
 
   const handleRecordPaymentSubmit = (data: z.infer<typeof paymentFormSchema>) => {
-    if (selectedBillForPayment) {
-      recordPaymentMutation.mutate({
-        billId: selectedBillForPayment.id,
-        amount: data.amount,
-        paidDate: data.paidDate,
-        dueDate: data.dueDate,
-        status: data.status || "paid",
-      });
-    }
+    recordPaymentMutation.mutate({
+      billId: data.billId,
+      amount: data.amount,
+      paidDate: data.paidDate,
+      dueDate: data.dueDate,
+      status: data.status || "paid",
+    });
   };
 
   const handleDelete = (id: string, name: string) => {
@@ -365,6 +361,33 @@ export default function Bills() {
     }
     
     return nextDue.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+
+  const getAnnualProjectedTotal = () => {
+    if (!summary?.monthlyTotals) return 0;
+    return summary.monthlyTotals.reduce((total, month) => total + month.projected, 0);
+  };
+
+  const getAnnualActualTotal = () => {
+    if (!summary?.monthlyTotals) return 0;
+    return summary.monthlyTotals.reduce((total, month) => total + month.actual, 0);
+  };
+
+  const getYTDActualTotal = () => {
+    if (!summary?.monthlyTotals) return 0;
+    // Only sum up to current month if viewing current year
+    const currentMonth = new Date().getMonth();
+    const isCurrentYear = selectedYear === new Date().getFullYear();
+    const monthsToSum = isCurrentYear ? currentMonth + 1 : 12;
+    return summary.monthlyTotals.slice(0, monthsToSum).reduce((total, month) => total + month.actual, 0);
+  };
+
+  const getYTDProjectedTotal = () => {
+    if (!summary?.monthlyTotals) return 0;
+    const currentMonth = new Date().getMonth();
+    const isCurrentYear = selectedYear === new Date().getFullYear();
+    const monthsToSum = isCurrentYear ? currentMonth + 1 : 12;
+    return summary.monthlyTotals.slice(0, monthsToSum).reduce((total, month) => total + month.projected, 0);
   };
 
   const getCategoryChartData = () => {
@@ -470,9 +493,9 @@ export default function Bills() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-muted-foreground text-sm font-medium">Annual Total</p>
+                    <p className="text-muted-foreground text-sm font-medium">Annual Projected</p>
                     <p className="text-2xl font-bold text-foreground mt-2" data-testid="text-annual-total">
-                      {formatCurrency((summary?.monthlyEquivalent || 0) * 12)}
+                      {formatCurrency(getAnnualProjectedTotal())}
                     </p>
                   </div>
                   <BarChart3 className="text-purple-500" size={24} />
@@ -631,9 +654,9 @@ export default function Bills() {
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-muted-foreground">Annual Projection</p>
+                          <p className="text-sm font-medium text-muted-foreground">Annual Projected</p>
                           <p className="text-2xl font-bold">
-                            {formatCurrency((summary?.monthlyEquivalent || 0) * 12)}
+                            {formatCurrency(getAnnualProjectedTotal())}
                           </p>
                         </div>
                         <TrendingUp className="h-8 w-8 text-blue-500" />
@@ -645,12 +668,9 @@ export default function Bills() {
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-muted-foreground">Year to Date</p>
+                          <p className="text-sm font-medium text-muted-foreground">Actual Year-to-Date</p>
                           <p className="text-2xl font-bold">
-                            {formatCurrency(
-                              summary?.monthlyTotals?.slice(0, new Date().getMonth() + 1)
-                                .reduce((sum, month) => sum + month.projected, 0) || 0
-                            )}
+                            {formatCurrency(getYTDActualTotal())}
                           </p>
                         </div>
                         <CalendarDays className="h-8 w-8 text-green-500" />
@@ -662,12 +682,9 @@ export default function Bills() {
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-muted-foreground">Remaining Year</p>
+                          <p className="text-sm font-medium text-muted-foreground">Remaining Projected</p>
                           <p className="text-2xl font-bold">
-                            {formatCurrency(
-                              summary?.monthlyTotals?.slice(new Date().getMonth() + 1)
-                                .reduce((sum, month) => sum + month.projected, 0) || 0
-                            )}
+                            {formatCurrency(getAnnualProjectedTotal() - getYTDProjectedTotal())}
                           </p>
                         </div>
                         <Clock className="h-8 w-8 text-orange-500" />
@@ -1029,7 +1046,14 @@ export default function Bills() {
                       <div className="text-center">
                         <p className="text-sm text-muted-foreground mb-2">Annual Projection</p>
                         <p className="text-3xl font-bold text-foreground">
-                          {formatCurrency((summary?.monthlyEquivalent || 0) * 12)}
+                          {formatCurrency(getAnnualProjectedTotal())}
+                        </p>
+                      </div>
+                      
+                      <div className="text-center">
+                        <p className="text-sm text-muted-foreground mb-2">Actual Year-to-Date</p>
+                        <p className="text-3xl font-bold text-foreground">
+                          {formatCurrency(getAnnualActualTotal())}
                         </p>
                       </div>
 

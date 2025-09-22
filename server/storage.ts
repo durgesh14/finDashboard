@@ -1,5 +1,6 @@
 import { type User, type InsertUser, type Investment, type InsertInvestment, type Transaction, type InsertTransaction, type Bill, type InsertBill, type BillPayment, type InsertBillPayment } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { calculateNextBillDueDate, formatDateForStorage } from "./date-utils";
 
 export interface IStorage {
   // User methods
@@ -159,6 +160,7 @@ export class MemStorage implements IStorage {
       ...insertBill,
       dueDay: insertBill.dueDay ?? null,
       nextDueDate: insertBill.nextDueDate ?? null,
+      lastPaidDate: null, // Initialize as null
       description: insertBill.description ?? null,
       vendor: insertBill.vendor ?? null,
       reminderDays: insertBill.reminderDays ?? 3,
@@ -198,19 +200,102 @@ export class MemStorage implements IStorage {
 
   async createBillPayment(insertPayment: InsertBillPayment): Promise<BillPayment> {
     const id = randomUUID();
+    const effectiveStatus = insertPayment.status ?? "paid";
     const payment: BillPayment = {
       ...insertPayment,
+      amount: insertPayment.amount.toString(), // Convert to string for database storage
       notes: insertPayment.notes ?? null,
-      status: insertPayment.status ?? "paid",
+      status: effectiveStatus,
       id,
       createdAt: new Date()
     };
     this.billPayments.set(id, payment);
+
+    // Update bill state after successful payment recording
+    if (effectiveStatus === "paid") {
+      await this.updateBillAfterPayment(insertPayment.billId, insertPayment.paidDate, insertPayment.dueDate);
+    }
+
     return payment;
   }
 
+  // deleteBillPayment is now implemented above with proper state management
+
+  // Helper method to update bill state after payment
+  private async updateBillAfterPayment(billId: string, paidDate: string, dueDate: string): Promise<void> {
+    const bill = await this.getBill(billId);
+    if (!bill || !bill.isActive || bill.frequency === "one_time") {
+      return;
+    }
+
+    // Calculate next due date based on the due date that was paid, not when it was paid
+    const dayAfterDue = new Date(dueDate);
+    dayAfterDue.setDate(dayAfterDue.getDate() + 1); // Start from day after due date
+    
+    const nextDueDate = calculateNextBillDueDate(bill, dayAfterDue);
+    const updates: Partial<InsertBill> = {};
+    
+    if (nextDueDate) {
+      updates.nextDueDate = formatDateForStorage(nextDueDate);
+    }
+    
+    // Update lastPaidDate
+    updates.lastPaidDate = paidDate;
+    
+    if (Object.keys(updates).length > 0) {
+      await this.updateBill(billId, updates);
+    }
+  }
+
   async deleteBillPayment(id: string): Promise<boolean> {
-    return this.billPayments.delete(id);
+    const payment = this.billPayments.get(id);
+    const deleted = this.billPayments.delete(id);
+    
+    // Recompute bill state after payment deletion
+    if (deleted && payment && payment.status === "paid") {
+      await this.recomputeBillStateAfterPaymentDeletion(payment.billId);
+    }
+    
+    return deleted;
+  }
+
+  // Recompute bill state after payment deletion by looking at remaining payments
+  private async recomputeBillStateAfterPaymentDeletion(billId: string): Promise<void> {
+    const bill = await this.getBill(billId);
+    if (!bill || !bill.isActive || bill.frequency === "one_time") {
+      return;
+    }
+
+    const remainingPayments = await this.getBillPayments(billId);
+    const paidPayments = remainingPayments.filter(p => p.status === "paid");
+    
+    if (paidPayments.length > 0) {
+      // Find the latest payment by due date and recalculate from there
+      const latestPayment = paidPayments.sort((a, b) => 
+        new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()
+      )[0];
+      
+      // Calculate next due date from the latest payment's due date
+      const dayAfterLatestDue = new Date(latestPayment.dueDate);
+      dayAfterLatestDue.setDate(dayAfterLatestDue.getDate() + 1);
+      
+      const nextDueDate = calculateNextBillDueDate(bill, dayAfterLatestDue);
+      if (nextDueDate) {
+        await this.updateBill(billId, {
+          nextDueDate: formatDateForStorage(nextDueDate),
+          lastPaidDate: latestPayment.paidDate
+        });
+      }
+    } else {
+      // No payments left, reset to original schedule from today
+      const nextDueDate = calculateNextBillDueDate(bill, new Date());
+      if (nextDueDate) {
+        await this.updateBill(billId, {
+          nextDueDate: formatDateForStorage(nextDueDate),
+          lastPaidDate: null // Clear last paid date
+        });
+      }
+    }
   }
 }
 
