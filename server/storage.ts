@@ -31,6 +31,7 @@ export interface IStorage {
   // Bill payment methods
   getBillPayments(billId: string): Promise<BillPayment[]>;
   createBillPayment(payment: InsertBillPayment): Promise<BillPayment>;
+  updateBillPayment(id: string, payment: Partial<InsertBillPayment>): Promise<BillPayment | undefined>;
   deleteBillPayment(id: string): Promise<boolean>;
 }
 
@@ -245,6 +246,31 @@ export class MemStorage implements IStorage {
     if (Object.keys(updates).length > 0) {
       await this.updateBill(billId, updates);
     }
+  }
+
+  async updateBillPayment(id: string, updateData: Partial<InsertBillPayment>): Promise<BillPayment | undefined> {
+    const payment = this.billPayments.get(id);
+    if (!payment) return undefined;
+
+    const oldStatus = payment.status;
+    const updatedPayment: BillPayment = {
+      ...payment,
+      ...updateData,
+      // Ensure amount is converted to string if provided
+      amount: updateData.amount !== undefined ? updateData.amount.toString() : payment.amount,
+    };
+    this.billPayments.set(id, updatedPayment);
+
+    // Handle status changes for bill state management
+    if (oldStatus === "paid" && updateData.status && updateData.status !== "paid") {
+      // Payment was paid but now changed to something else - recompute bill state
+      await this.recomputeBillStateAfterPaymentDeletion(payment.billId);
+    } else if (oldStatus !== "paid" && updateData.status === "paid") {
+      // Payment status changed to paid - update bill state
+      await this.updateBillAfterPayment(payment.billId, payment.paidDate, payment.dueDate);
+    }
+
+    return updatedPayment;
   }
 
   async deleteBillPayment(id: string): Promise<boolean> {

@@ -383,12 +383,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           });
           
-          // Calculate actual payments for this month
+          // Calculate actual payments for this month (only count paid status)
           for (const bill of bills) {
             const payments = await storage.getBillPayments(bill.id);
             const monthPayments = payments.filter(payment => {
               const paymentDate = new Date(payment.paidDate);
-              return paymentDate.getFullYear() === year && paymentDate.getMonth() === monthIndex;
+              return payment.status === 'paid' && 
+                     paymentDate.getFullYear() === year && 
+                     paymentDate.getMonth() === monthIndex;
             });
             actual += monthPayments.reduce((sum, payment) => sum + parseFloat(payment.amount), 0);
           }
@@ -561,6 +563,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(payments);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch bill payments" });
+    }
+  });
+
+  // Update bill payment
+  app.put("/api/bill-payments/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const validatedData = insertBillPaymentSchema.partial().parse(req.body);
+      const payment = await storage.updateBillPayment(id, validatedData);
+      if (!payment) {
+        return res.status(404).json({ error: "Payment not found" });
+      }
+      res.json(payment);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid payment data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to update payment" });
+    }
+  });
+
+  // Delete bill payment
+  app.delete("/api/bill-payments/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteBillPayment(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Payment not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete payment" });
     }
   });
 

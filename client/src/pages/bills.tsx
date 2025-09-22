@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Bill, InsertBill } from "@shared/schema";
+import { Bill, BillPayment, InsertBill } from "@shared/schema";
 import { 
   Plus, 
   Search, 
@@ -119,6 +119,8 @@ export default function Bills() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [isRecordPaymentModalOpen, setIsRecordPaymentModalOpen] = useState(false);
   const [selectedBillForPayment, setSelectedBillForPayment] = useState<Bill | null>(null);
+  const [selectedBillPayments, setSelectedBillPayments] = useState<BillPayment[]>([]);
+  const [editingPayment, setEditingPayment] = useState<BillPayment | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -144,11 +146,42 @@ export default function Bills() {
       toast({ title: "Payment recorded successfully" });
       queryClient.invalidateQueries({ queryKey: ["/api/bills/summary", selectedYear] });
       queryClient.invalidateQueries({ queryKey: ["/api/bills"] });
-      setIsRecordPaymentModalOpen(false);
-      setSelectedBillForPayment(null);
+      handleClosePaymentModal();
     },
     onError: () => {
       toast({ title: "Failed to record payment", variant: "destructive" });
+    },
+  });
+
+  const updatePaymentMutation = useMutation({
+    mutationFn: (data: { id: string; amount: number; paidDate: string; dueDate: string; status: string }) =>
+      apiRequest("PUT", `/api/bill-payments/${data.id}`, {
+        amount: data.amount,
+        paidDate: data.paidDate,
+        dueDate: data.dueDate,
+        status: data.status,
+      }),
+    onSuccess: () => {
+      toast({ title: "Payment updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/bills/summary", selectedYear] });
+      queryClient.invalidateQueries({ queryKey: ["/api/bills"] });
+      handleClosePaymentModal();
+    },
+    onError: () => {
+      toast({ title: "Failed to update payment", variant: "destructive" });
+    },
+  });
+
+  const deletePaymentMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/bill-payments/${id}`),
+    onSuccess: () => {
+      toast({ title: "Payment deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/bills/summary", selectedYear] });
+      queryClient.invalidateQueries({ queryKey: ["/api/bills"] });
+      handleClosePaymentModal();
+    },
+    onError: () => {
+      toast({ title: "Failed to delete payment", variant: "destructive" });
     },
   });
 
@@ -310,11 +343,25 @@ export default function Bills() {
   const handleClosePaymentModal = () => {
     setIsRecordPaymentModalOpen(false);
     setSelectedBillForPayment(null);
+    setSelectedBillPayments([]);
+    setEditingPayment(null);
     paymentForm.reset();
   };
 
-  const handleRecordPayment = (bill: Bill) => {
+  const handleRecordPayment = async (bill: Bill) => {
     setSelectedBillForPayment(bill);
+    setEditingPayment(null);
+    // Fetch existing payments for this bill
+    try {
+      const response = await fetch(`/api/bills/${bill.id}/payments`);
+      if (response.ok) {
+        const payments = await response.json();
+        setSelectedBillPayments(payments);
+      }
+    } catch (error) {
+      console.error('Failed to fetch payments:', error);
+      setSelectedBillPayments([]);
+    }
     paymentForm.reset({
       amount: parseFloat(bill.amount),
       billId: bill.id,
@@ -326,13 +373,60 @@ export default function Bills() {
   };
 
   const handleRecordPaymentSubmit = (data: z.infer<typeof paymentFormSchema>) => {
-    recordPaymentMutation.mutate({
-      billId: data.billId,
-      amount: data.amount,
-      paidDate: data.paidDate,
-      dueDate: data.dueDate,
-      status: data.status || "paid",
+    if (editingPayment) {
+      // Update existing payment
+      updatePaymentMutation.mutate({
+        id: editingPayment.id,
+        amount: data.amount,
+        paidDate: data.paidDate,
+        dueDate: data.dueDate,
+        status: data.status || "paid",
+      });
+    } else {
+      // Create new payment
+      recordPaymentMutation.mutate({
+        billId: data.billId,
+        amount: data.amount,
+        paidDate: data.paidDate,
+        dueDate: data.dueDate,
+        status: data.status || "paid",
+      });
+    }
+  };
+
+  const handleEditPayment = (payment: BillPayment) => {
+    setEditingPayment(payment);
+    paymentForm.reset({
+      amount: parseFloat(payment.amount),
+      billId: payment.billId,
+      paidDate: payment.paidDate,
+      dueDate: payment.dueDate,
+      status: payment.status,
     });
+  };
+
+  const handleDeletePayment = (paymentId: string) => {
+    if (confirm("Are you sure you want to delete this payment?")) {
+      deletePaymentMutation.mutate(paymentId);
+    }
+  };
+
+  const getStatusBadgeVariant = (status: string) => {
+    switch (status) {
+      case 'paid': return 'default';
+      case 'cancelled': return 'destructive';
+      case 'overdue': return 'secondary';
+      default: return 'outline';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'paid': return 'Paid';
+      case 'cancelled': return 'Cancelled';
+      case 'overdue': return 'Overdue';
+      default: return status;
+    }
   };
 
   const handleDelete = (id: string, name: string) => {
@@ -493,9 +587,9 @@ export default function Bills() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-muted-foreground text-sm font-medium">Annual Projected</p>
+                    <p className="text-muted-foreground text-sm font-medium">Annual Actual</p>
                     <p className="text-2xl font-bold text-foreground mt-2" data-testid="text-annual-total">
-                      {formatCurrency(getAnnualProjectedTotal())}
+                      {formatCurrency(summary?.monthlyTotals?.reduce((sum, month) => sum + month.actual, 0) || 0)}
                     </p>
                   </div>
                   <BarChart3 className="text-purple-500" size={24} />
@@ -573,9 +667,11 @@ export default function Bills() {
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="monthName" />
                             <YAxis />
-                            <Tooltip formatter={(value: number) => [formatCurrency(value), '']} />
-                            <Bar dataKey="projected" fill="#3B82F6" name="Projected" />
-                            <Bar dataKey="actual" fill="#10B981" name="Actual" />
+                            <Tooltip 
+                              formatter={(value: number) => [formatCurrency(value), 'Bills Paid']}
+                              labelFormatter={(label) => `${label} ${selectedYear}`}
+                            />
+                            <Bar dataKey="actual" fill="#10B981" name="Bills Paid" radius={[4, 4, 0, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
@@ -601,16 +697,12 @@ export default function Bills() {
                           <thead>
                             <tr className="border-b">
                               <th className="text-left p-3">Month</th>
-                              <th className="text-right p-3">Projected</th>
-                              <th className="text-right p-3">Actual</th>
-                              <th className="text-right p-3">Difference</th>
-                              <th className="text-right p-3">Status</th>
+                              <th className="text-right p-3">Bills Paid</th>
+                              <th className="text-center p-3">Status</th>
                             </tr>
                           </thead>
                           <tbody>
                             {summary?.monthlyTotals?.map((month, index) => {
-                              const difference = month.actual - month.projected;
-                              const isOverBudget = difference > 0;
                               const currentMonth = new Date().getMonth() + 1;
                               const isCurrentMonth = month.month === currentMonth && selectedYear === new Date().getFullYear();
                               const isPastMonth = selectedYear < new Date().getFullYear() || 
@@ -619,18 +711,32 @@ export default function Bills() {
                               return (
                                 <tr key={index} className={`border-b ${isCurrentMonth ? 'bg-blue-50 dark:bg-blue-950' : ''}`}>
                                   <td className="p-3 font-medium">{month.monthName}</td>
-                                  <td className="p-3 text-right">{formatCurrency(month.projected)}</td>
-                                  <td className="p-3 text-right">{formatCurrency(month.actual)}</td>
-                                  <td className={`p-3 text-right ${isOverBudget ? 'text-red-600' : 'text-green-600'}`}>
-                                    {difference !== 0 ? (isOverBudget ? '+' : '') + formatCurrency(difference) : '-'}
+                                  <td className={`p-3 text-right font-semibold ${
+                                    month.actual > 0 ? 'text-green-600' : 'text-muted-foreground'
+                                  }`}>
+                                    {month.actual > 0 ? formatCurrency(month.actual) : '-'}
                                   </td>
-                                  <td className="p-3 text-right">
-                                    <span className={`px-2 py-1 rounded-full text-xs ${
+                                  <td className="p-3 text-center">
+                                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                                       isCurrentMonth ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
-                                      isPastMonth ? 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200' :
-                                      'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                                      isPastMonth 
+                                        ? (month.actual > 0 
+                                          ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
+                                          : (month.projected > 0
+                                            ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+                                            : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                                          )
+                                        )
+                                        : (month.projected > 0
+                                          ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                                          : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                                        )
                                     }`}>
-                                      {isCurrentMonth ? 'Current' : isPastMonth ? 'Past' : 'Future'}
+                                      {isCurrentMonth ? 'This Month' : 
+                                       isPastMonth 
+                                        ? (month.actual > 0 ? 'Paid' : (month.projected > 0 ? 'Unpaid' : 'No Bills'))
+                                        : (month.projected > 0 ? 'Upcoming' : 'No Bills')
+                                      }
                                     </span>
                                   </td>
                                 </tr>
@@ -654,9 +760,9 @@ export default function Bills() {
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-muted-foreground">Annual Projected</p>
+                          <p className="text-sm font-medium text-muted-foreground">Annual Actual</p>
                           <p className="text-2xl font-bold">
-                            {formatCurrency(getAnnualProjectedTotal())}
+                            {formatCurrency(summary?.monthlyTotals?.reduce((sum, month) => sum + month.actual, 0) || 0)}
                           </p>
                         </div>
                         <TrendingUp className="h-8 w-8 text-blue-500" />
@@ -682,12 +788,19 @@ export default function Bills() {
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-muted-foreground">Remaining Projected</p>
+                          <p className="text-sm font-medium text-muted-foreground">Average Monthly Spending</p>
                           <p className="text-2xl font-bold">
-                            {formatCurrency(getAnnualProjectedTotal() - getYTDProjectedTotal())}
+                            {(() => {
+                              const currentYear = new Date().getFullYear();
+                              const monthsToUse = selectedYear === currentYear 
+                                ? new Date().getMonth() + 1 
+                                : 12;
+                              const ytdTotal = getYTDActualTotal();
+                              return formatCurrency(monthsToUse > 0 ? ytdTotal / monthsToUse : 0);
+                            })()}
                           </p>
                         </div>
-                        <Clock className="h-8 w-8 text-orange-500" />
+                        <TrendingUp className="h-8 w-8 text-blue-500" />
                       </div>
                     </CardContent>
                   </Card>
@@ -698,7 +811,7 @@ export default function Bills() {
                   <CardHeader>
                     <CardTitle className="flex items-center">
                       <BarChart3 className="mr-2" size={20} />
-                      Quarterly Analysis
+                      Quarterly Spending
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -711,7 +824,7 @@ export default function Bills() {
                       ].map((quarter, index) => {
                         const total = summary?.monthlyTotals
                           ?.filter((_, monthIndex) => quarter.months.includes(monthIndex))
-                          .reduce((sum, month) => sum + month.projected, 0) || 0;
+                          .reduce((sum, month) => sum + month.actual, 0) || 0;
                         
                         return (
                           <div key={index} className="p-4 border rounded-lg">
@@ -719,9 +832,9 @@ export default function Bills() {
                               <h3 className="font-medium">{quarter.name}</h3>
                               <div className={`w-3 h-3 rounded-full ${quarter.color}`}></div>
                             </div>
-                            <p className="text-2xl font-bold">{formatCurrency(total)}</p>
+                            <p className="text-2xl font-bold text-green-600">{formatCurrency(total)}</p>
                             <p className="text-sm text-muted-foreground">
-                              {quarter.months.map(m => summary?.monthlyTotals?.[m]?.monthName.slice(0, 3)).join(', ')}
+                              {total > 0 ? 'Bills Paid' : 'No payments'} • {quarter.months.map(m => summary?.monthlyTotals?.[m]?.monthName?.slice(0, 3) ?? '?').join(', ')}
                             </p>
                           </div>
                         );
@@ -1140,113 +1253,247 @@ export default function Bills() {
         </div>
       </main>
 
-      {/* Record Payment Modal */}
+      {/* Payment Management Modal */}
       <Dialog open={isRecordPaymentModalOpen} onOpenChange={handleClosePaymentModal}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Record Payment - {selectedBillForPayment?.name}</DialogTitle>
+            <DialogTitle>Manage Payments - {selectedBillForPayment?.name}</DialogTitle>
           </DialogHeader>
           
-          <Form {...paymentForm}>
-            <form onSubmit={paymentForm.handleSubmit(handleRecordPaymentSubmit)} className="space-y-4">
-                <FormField
-                  control={paymentForm.control}
-                  name="amount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Amount</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="number" 
-                          step="0.01" 
-                          placeholder="0.00" 
-                          {...field}
-                          data-testid="input-amount" 
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+          <div className="space-y-6">
+            {/* Existing Payments */}
+            {selectedBillPayments.length > 0 && (
+              <div>
+                <h3 className="text-lg font-medium mb-3">Payment History</h3>
+                <div className="space-y-3">
+                  {selectedBillPayments.map((payment) => (
+                    <div key={payment.id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <div>
+                          <p className="font-medium">{formatCurrency(payment.amount)}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Paid: {new Date(payment.paidDate).toLocaleDateString()} | Due: {new Date(payment.dueDate).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Badge variant={getStatusBadgeVariant(payment.status)}>
+                          {getStatusLabel(payment.status)}
+                        </Badge>
+                        <div className="flex space-x-1">
+                          {payment.status !== 'paid' && (
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => updatePaymentMutation.mutate({
+                                id: payment.id, 
+                                amount: parseFloat(payment.amount),
+                                paidDate: payment.paidDate,
+                                dueDate: payment.dueDate,
+                                status: 'paid'
+                              })}
+                              disabled={updatePaymentMutation.isPending}
+                            >
+                              Mark Paid
+                            </Button>
+                          )}
+                          {payment.status !== 'cancelled' && (
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => updatePaymentMutation.mutate({
+                                id: payment.id, 
+                                amount: parseFloat(payment.amount),
+                                paidDate: payment.paidDate,
+                                dueDate: payment.dueDate,
+                                status: 'cancelled'
+                              })}
+                              disabled={updatePaymentMutation.isPending}
+                            >
+                              Cancel
+                            </Button>
+                          )}
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            onClick={() => handleEditPayment(payment)}
+                          >
+                            <Edit size={14} />
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            onClick={() => handleDeletePayment(payment.id)}
+                            disabled={deletePaymentMutation.isPending}
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-                <FormField
-                  control={paymentForm.control}
-                  name="paidDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Paid Date</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="date" 
-                          {...field}
-                          data-testid="input-paid-date" 
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+            {/* Add New Payment Form */}
+            {(editingPayment || selectedBillPayments.length === 0) && (
+              <div>
+                <h3 className="text-lg font-medium mb-3">
+                  {editingPayment ? 'Edit Payment' : 'Add New Payment'}
+                </h3>
+                <Form {...paymentForm}>
+                  <form onSubmit={paymentForm.handleSubmit(handleRecordPaymentSubmit)} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={paymentForm.control}
+                        name="amount"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Amount</FormLabel>
+                            <FormControl>
+                              <Input 
+                                type="number" 
+                                step="0.01" 
+                                placeholder="0.00" 
+                                {...field}
+                                data-testid="input-amount" 
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                <FormField
-                  control={paymentForm.control}
-                  name="dueDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Due Date</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="date" 
-                          {...field}
-                          data-testid="input-due-date" 
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                      <FormField
+                        control={paymentForm.control}
+                        name="status"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Status</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger data-testid="select-status">
+                                  <SelectValue />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="paid">Paid</SelectItem>
+                                <SelectItem value="overdue">Overdue</SelectItem>
+                                <SelectItem value="cancelled">Cancelled</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
 
-                <FormField
-                  control={paymentForm.control}
-                  name="status"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Status</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-status">
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="paid">Paid</SelectItem>
-                          <SelectItem value="overdue">Overdue</SelectItem>
-                          <SelectItem value="cancelled">Cancelled</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={paymentForm.control}
+                        name="paidDate"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Paid Date</FormLabel>
+                            <FormControl>
+                              <Input 
+                                type="date" 
+                                {...field}
+                                data-testid="input-paid-date" 
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-              <div className="flex justify-end space-x-2">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={handleClosePaymentModal}
-                  data-testid="button-cancel-payment"
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  type="submit" 
-                  disabled={recordPaymentMutation.isPending}
-                  data-testid="button-submit-payment"
-                >
-                  {recordPaymentMutation.isPending ? "Recording..." : "Record Payment"}
+                      <FormField
+                        control={paymentForm.control}
+                        name="dueDate"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Due Date</FormLabel>
+                            <FormControl>
+                              <Input 
+                                type="date" 
+                                {...field}
+                                data-testid="input-due-date" 
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="flex justify-end space-x-2 pt-4">
+                      {editingPayment && (
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          onClick={() => {
+                            setEditingPayment(null);
+                            paymentForm.reset({
+                              amount: selectedBillForPayment ? parseFloat(selectedBillForPayment.amount) : 0,
+                              billId: selectedBillForPayment?.id || "",
+                              paidDate: new Date().toISOString().split('T')[0],
+                              dueDate: new Date().toISOString().split('T')[0],
+                              status: "paid",
+                            });
+                          }}
+                        >
+                          Cancel Edit
+                        </Button>
+                      )}
+                      <Button type="submit" disabled={recordPaymentMutation.isPending || updatePaymentMutation.isPending}>
+                        {editingPayment 
+                          ? (updatePaymentMutation.isPending ? "Updating..." : "Update Payment")
+                          : (recordPaymentMutation.isPending ? "Adding..." : "Add Payment")
+                        }
+                      </Button>
+                    </div>
+                  </form>
+                </Form>
+              </div>
+            )}
+
+            {/* Quick Actions */}
+            {selectedBillPayments.length > 0 && !editingPayment && (
+              <div className="border-t pt-4">
+                <div className="flex justify-between items-center">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      paymentForm.reset({
+                        amount: selectedBillForPayment ? parseFloat(selectedBillForPayment.amount) : 0,
+                        billId: selectedBillForPayment?.id || "",
+                        paidDate: new Date().toISOString().split('T')[0],
+                        dueDate: new Date().toISOString().split('T')[0],
+                        status: "paid",
+                      });
+                      setEditingPayment({} as BillPayment);
+                    }}
+                  >
+                    <Plus size={16} className="mr-2" />
+                    Add New Payment
+                  </Button>
+                  <Button variant="outline" onClick={handleClosePaymentModal}>
+                    Close
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Close button for new payments */}
+            {selectedBillPayments.length === 0 && !editingPayment && (
+              <div className="flex justify-end">
+                <Button variant="outline" onClick={handleClosePaymentModal}>
+                  Close
                 </Button>
               </div>
-            </form>
-          </Form>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
