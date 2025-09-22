@@ -1,31 +1,21 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
-import { Investment } from "@shared/schema";
+import { Investment, InvestmentType } from "@shared/schema";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 
-const COLORS = {
-  mutual_fund: '#3B82F6',
-  fixed_deposit: '#10B981',
-  recurring_deposit: '#8B5CF6',
-  lic: '#F59E0B',
-  ppf: '#EF4444',
-  stocks: '#06B6D4',
-  other: '#6B7280'
-};
-
-const TYPE_LABELS = {
-  mutual_fund: 'Mutual Funds',
-  fixed_deposit: 'Fixed Deposits',
-  recurring_deposit: 'Recurring Deposits',
-  lic: 'LIC/Insurance',
-  ppf: 'PPF',
-  stocks: 'Stocks',
-  other: 'Other'
-};
+// Color palette for dynamic types
+const CHART_COLORS = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444', '#06B6D4', '#6B7280', '#EC4899', '#84CC16'];
 
 export function AllocationChart() {
+  const [valueType, setValueType] = useState<'invested' | 'current'>('current');
+  
   const { data: investments, isLoading } = useQuery<Investment[]>({
     queryKey: ["/api/investments"],
+  });
+  
+  const { data: investmentTypes } = useQuery<InvestmentType[]>({
+    queryKey: ["/api/investment-types"],
   });
 
   if (isLoading) {
@@ -48,25 +38,52 @@ export function AllocationChart() {
     );
   }
 
-  // Group investments by type and calculate totals
-  const allocationData = investments?.reduce((acc, investment) => {
-    const type = investment.type as keyof typeof COLORS;
-    const amount = parseFloat(investment.principalAmount);
+  // Calculate current value for an investment
+  const calculateCurrentValue = (investment: Investment) => {
+    const principal = parseFloat(investment.principalAmount);
+    const annualReturnRate = investment.expectedReturn ? parseFloat(investment.expectedReturn) / 100 : 0.08;
     
-    if (!acc[type]) {
-      acc[type] = {
-        type,
-        label: TYPE_LABELS[type] || type,
-        value: 0,
-        color: COLORS[type] || COLORS.other
+    // Calculate months elapsed since start date
+    const startDate = new Date(investment.startDate);
+    const currentDate = new Date();
+    const monthsElapsed = Math.max(0, (currentDate.getFullYear() - startDate.getFullYear()) * 12 + (currentDate.getMonth() - startDate.getMonth()));
+    
+    // Simple annual compounding: principal * (1 + rate)^years
+    const yearsElapsed = monthsElapsed / 12;
+    return principal * Math.pow(1 + annualReturnRate, yearsElapsed);
+  };
+
+  // Group investments by type and calculate totals
+  const allocationData = investments?.reduce((acc, investment, index) => {
+    const typeId = investment.type;
+    const typeInfo = investmentTypes?.find(t => t.id === typeId);
+    const typeName = typeInfo?.name || 'Unknown';
+    
+    const principalAmount = parseFloat(investment.principalAmount);
+    const currentValue = calculateCurrentValue(investment);
+    
+    if (!acc[typeId]) {
+      const colorIndex = Object.keys(acc).length;
+      acc[typeId] = {
+        type: typeId,
+        label: typeName,
+        invested: 0,
+        current: 0,
+        color: CHART_COLORS[colorIndex % CHART_COLORS.length]
       };
     }
     
-    acc[type].value += amount;
+    acc[typeId].invested += principalAmount;
+    acc[typeId].current += currentValue;
     return acc;
-  }, {} as Record<string, { type: string; label: string; value: number; color: string }>) || {};
+  }, {} as Record<string, { type: string; label: string; invested: number; current: number; color: string }>) || {};
 
-  const chartData = Object.values(allocationData);
+  // Convert to chart data with the selected value type
+  const chartData = Object.values(allocationData).map(item => ({
+    ...item,
+    value: valueType === 'invested' ? item.invested : item.current
+  })).filter(item => item.value > 0);
+
   const total = chartData.reduce((sum, item) => sum + item.value, 0);
 
   const formatCurrency = (amount: number) => {
@@ -86,9 +103,14 @@ export function AllocationChart() {
       <CardContent className="p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-semibold text-foreground">Investment Allocation</h3>
-          <select className="text-sm border border-border rounded-md px-3 py-1 bg-background text-foreground">
-            <option>Current Value</option>
-            <option>Invested Amount</option>
+          <select 
+            className="text-sm border border-border rounded-md px-3 py-1 bg-background text-foreground"
+            value={valueType}
+            onChange={(e) => setValueType(e.target.value as 'invested' | 'current')}
+            data-testid="select-allocation-type"
+          >
+            <option value="current">Current Value</option>
+            <option value="invested">Invested Amount</option>
           </select>
         </div>
         

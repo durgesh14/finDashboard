@@ -111,19 +111,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return sum + parseFloat(inv.principalAmount);
       }, 0);
 
-      // Calculate estimated current value (more accurate calculation)
+      // Calculate estimated current value (matching frontend calculation)
       const currentValue = investments.reduce((sum, inv) => {
         const principal = parseFloat(inv.principalAmount);
-        const returnRate = inv.expectedReturn ? parseFloat(inv.expectedReturn) / 100 : 0.08;
+        const annualReturnRate = inv.expectedReturn ? parseFloat(inv.expectedReturn) / 100 : 0.08;
         const startDate = new Date(inv.startDate);
         const currentDate = new Date();
-        const months = Math.max(0, Math.floor((currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30)));
         
         // Skip future-dated investments
         if (startDate > currentDate) return sum;
         
-        // Simple compound interest calculation
-        const estimated = principal * Math.pow(1 + returnRate/12, months);
+        // Calculate months elapsed using proper year/month calculation
+        const monthsElapsed = Math.max(0, (currentDate.getFullYear() - startDate.getFullYear()) * 12 + (currentDate.getMonth() - startDate.getMonth()));
+        const yearsElapsed = monthsElapsed / 12;
+        
+        // Simple annual compounding: principal * (1 + rate)^years
+        const estimated = principal * Math.pow(1 + annualReturnRate, yearsElapsed);
         return sum + estimated;
       }, 0);
 

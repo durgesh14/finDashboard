@@ -984,7 +984,8 @@ export default function Bills() {
                         </thead>
                         <tbody className="divide-y divide-border">
                           {filteredBills.map((bill) => {
-                            const IconComponent = CATEGORY_ICONS[bill.category as keyof typeof CATEGORY_ICONS] || Receipt;
+                            const categoryName = billCategories?.find(c => c.id === bill.category)?.name || bill.category;
+                            const IconComponent = getCategoryIcon(categoryName);
                             
                             return (
                               <tr key={bill.id} className="hover:bg-muted/30 transition-colors" data-testid={`row-bill-${bill.id}`}>

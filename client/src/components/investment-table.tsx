@@ -1,39 +1,51 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
-import { Investment } from "@shared/schema";
+import { Investment, InvestmentType } from "@shared/schema";
 import { Eye, Edit, Trash2, Search, PieChart, Banknote, Coins, Shield, Landmark } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
-const TYPE_ICONS = {
-  mutual_fund: PieChart,
-  fixed_deposit: Banknote,
-  recurring_deposit: Coins,
-  lic: Shield,
-  ppf: Landmark,
-  stocks: PieChart,
-  other: PieChart
+// Dynamic icon mapping for investment types
+const getTypeIcon = (name: string) => {
+  const defaultIcons: { [key: string]: any } = {
+    mutual: PieChart,
+    fund: PieChart,
+    fixed: Banknote,
+    deposit: Banknote,
+    recurring: Coins,
+    lic: Shield,
+    insurance: Shield,
+    ppf: Landmark,
+    stock: PieChart,
+    equity: PieChart
+  };
+  
+  const lowerName = name.toLowerCase();
+  for (const [key, icon] of Object.entries(defaultIcons)) {
+    if (lowerName.includes(key)) {
+      return icon;
+    }
+  }
+  
+  return PieChart; // Default icon
 };
 
-const TYPE_LABELS = {
-  mutual_fund: 'Mutual Fund',
-  fixed_deposit: 'Fixed Deposit',
-  recurring_deposit: 'Recurring Deposit',
-  lic: 'LIC/Insurance',
-  ppf: 'PPF',
-  stocks: 'Stocks',
-  other: 'Other'
-};
-
-const TYPE_COLORS = {
-  mutual_fund: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  fixed_deposit: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  recurring_deposit: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-  lic: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-  ppf: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-  stocks: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200',
-  other: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+// Dynamic color generation for investment types
+const getTypeColor = (index: number) => {
+  const colors = [
+    'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+    'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+    'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+    'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+    'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+    'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200',
+    'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200',
+    'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
+    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+    'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+  ];
+  return colors[index % colors.length];
 };
 
 interface InvestmentTableProps {
@@ -48,6 +60,10 @@ export function InvestmentTable({ onEditInvestment }: InvestmentTableProps) {
 
   const { data: investments, isLoading } = useQuery<Investment[]>({
     queryKey: ["/api/investments"],
+  });
+  
+  const { data: investmentTypes } = useQuery<InvestmentType[]>({
+    queryKey: ["/api/investment-types"],
   });
 
   const deleteMutation = useMutation({
@@ -102,15 +118,24 @@ export function InvestmentTable({ onEditInvestment }: InvestmentTableProps) {
 
   const calculateCurrentValue = (investment: Investment) => {
     const principal = parseFloat(investment.principalAmount);
-    const returnRate = investment.expectedReturn ? parseFloat(investment.expectedReturn) / 100 : 0.08;
-    const months = Math.max(1, Math.floor((Date.now() - new Date(investment.startDate).getTime()) / (1000 * 60 * 60 * 24 * 30)));
-    return principal * Math.pow(1 + returnRate/12, months);
+    const annualReturnRate = investment.expectedReturn ? parseFloat(investment.expectedReturn) / 100 : 0.08;
+    
+    // Calculate months elapsed since start date
+    const startDate = new Date(investment.startDate);
+    const currentDate = new Date();
+    const monthsElapsed = Math.max(0, (currentDate.getFullYear() - startDate.getFullYear()) * 12 + (currentDate.getMonth() - startDate.getMonth()));
+    
+    // Simple annual compounding: principal * (1 + rate)^years
+    const yearsElapsed = monthsElapsed / 12;
+    return principal * Math.pow(1 + annualReturnRate, yearsElapsed);
   };
 
   const calculateReturns = (investment: Investment) => {
-    const principal = parseFloat(investment.principalAmount);
-    const currentValue = calculateCurrentValue(investment);
-    return ((currentValue - principal) / principal) * 100;
+    if (!investment.expectedReturn) return 0;
+    
+    // For simplicity, just return the expected return rate as set by user
+    // This is what users expect to see - the rate they entered
+    return parseFloat(investment.expectedReturn);
   };
 
   const getNextPaymentDate = (investment: Investment) => {
@@ -262,13 +287,11 @@ export function InvestmentTable({ onEditInvestment }: InvestmentTableProps) {
               data-testid="select-investment-type"
             >
               <option value="">All Types</option>
-              <option value="mutual_fund">Mutual Funds</option>
-              <option value="fixed_deposit">Fixed Deposits</option>
-              <option value="recurring_deposit">Recurring Deposits</option>
-              <option value="lic">Insurance</option>
-              <option value="ppf">PPF</option>
-              <option value="stocks">Stocks</option>
-              <option value="other">Other</option>
+              {investmentTypes?.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {type.name}
+                </option>
+              ))}
             </select>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={16} />
@@ -308,10 +331,13 @@ export function InvestmentTable({ onEditInvestment }: InvestmentTableProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filteredInvestments.map((investment) => {
-                  const IconComponent = TYPE_ICONS[investment.type as keyof typeof TYPE_ICONS] || PieChart;
+                {filteredInvestments.map((investment, index) => {
+                  const typeInfo = investmentTypes?.find(t => t.id === investment.type);
+                  const typeName = typeInfo?.name || 'Unknown';
+                  const IconComponent = getTypeIcon(typeName);
                   const currentValue = calculateCurrentValue(investment);
                   const returns = calculateReturns(investment);
+                  const typeIndex = investmentTypes?.findIndex(t => t.id === investment.type) ?? 0;
                   
                   return (
                     <tr key={investment.id} className="hover:bg-muted/30 transition-colors" data-testid={`row-investment-${investment.id}`}>
@@ -329,8 +355,8 @@ export function InvestmentTable({ onEditInvestment }: InvestmentTableProps) {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${TYPE_COLORS[investment.type as keyof typeof TYPE_COLORS]}`}>
-                          {TYPE_LABELS[investment.type as keyof typeof TYPE_LABELS]}
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getTypeColor(typeIndex)}`} data-testid={`type-${investment.type}`}>
+                          {typeName}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right text-foreground font-medium">
