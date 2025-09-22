@@ -332,12 +332,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const billsDueThisWeek = bills.filter(bill => {
         if (!bill.isActive || !bill.dueDay || bill.frequency === 'one_time') return false;
         
-        const dueDate = new Date(today.getFullYear(), today.getMonth(), bill.dueDay);
-        if (dueDate < today) {
-          dueDate.setMonth(dueDate.getMonth() + 1);
-        }
+        // Helper to get next valid due date
+        const getNextDueDate = (dueDay: number, fromDate: Date) => {
+          const currentYear = fromDate.getFullYear();
+          const currentMonth = fromDate.getMonth();
+          
+          // Try current month first
+          const daysInCurrentMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+          const validDueDay = Math.min(dueDay, daysInCurrentMonth);
+          const currentMonthDue = new Date(currentYear, currentMonth, validDueDay);
+          
+          if (currentMonthDue >= fromDate) {
+            return currentMonthDue;
+          }
+          
+          // Try next month
+          const nextMonth = currentMonth + 1;
+          const nextYear = nextMonth > 11 ? currentYear + 1 : currentYear;
+          const adjustedNextMonth = nextMonth > 11 ? 0 : nextMonth;
+          
+          const daysInNextMonth = new Date(nextYear, adjustedNextMonth + 1, 0).getDate();
+          const validNextDueDay = Math.min(dueDay, daysInNextMonth);
+          
+          return new Date(nextYear, adjustedNextMonth, validNextDueDay);
+        };
         
-        return dueDate <= nextWeek;
+        const nextDueDate = getNextDueDate(bill.dueDay, today);
+        return nextDueDate <= nextWeek;
       });
 
       // Generate monthly breakdown for the year with actual payments
@@ -556,15 +577,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get bill payments
-  app.get("/api/bills/:id/payments", async (req, res) => {
-    try {
-      const payments = await storage.getBillPayments(req.params.id);
-      res.json(payments);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch bill payments" });
-    }
-  });
 
   // Update bill payment
   app.put("/api/bill-payments/:id", async (req, res) => {

@@ -121,6 +121,7 @@ export default function Bills() {
   const [selectedBillForPayment, setSelectedBillForPayment] = useState<Bill | null>(null);
   const [selectedBillPayments, setSelectedBillPayments] = useState<BillPayment[]>([]);
   const [editingPayment, setEditingPayment] = useState<BillPayment | null>(null);
+  const [showNewPaymentForm, setShowNewPaymentForm] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -345,6 +346,7 @@ export default function Bills() {
     setSelectedBillForPayment(null);
     setSelectedBillPayments([]);
     setEditingPayment(null);
+    setShowNewPaymentForm(false);
     paymentForm.reset();
   };
 
@@ -369,6 +371,7 @@ export default function Bills() {
       dueDate: new Date().toISOString().split('T')[0],
       status: "paid",
     });
+    setShowNewPaymentForm(selectedBillPayments.length === 0);
     setIsRecordPaymentModalOpen(true);
   };
 
@@ -392,6 +395,7 @@ export default function Bills() {
         status: data.status || "paid",
       });
     }
+    setShowNewPaymentForm(false);
   };
 
   const handleEditPayment = (payment: BillPayment) => {
@@ -665,7 +669,13 @@ export default function Bills() {
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={summary?.monthlyTotals || []}>
                             <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="monthName" />
+                            <XAxis 
+                              dataKey="monthName" 
+                              interval={0}
+                              angle={-45}
+                              textAnchor="end"
+                              height={80}
+                            />
                             <YAxis />
                             <Tooltip 
                               formatter={(value: number) => [formatCurrency(value), 'Bills Paid']}
@@ -791,12 +801,23 @@ export default function Bills() {
                           <p className="text-sm font-medium text-muted-foreground">Average Monthly Spending</p>
                           <p className="text-2xl font-bold">
                             {(() => {
+                              if (!summary?.monthlyTotals) return formatCurrency(0);
+                              
                               const currentYear = new Date().getFullYear();
-                              const monthsToUse = selectedYear === currentYear 
-                                ? new Date().getMonth() + 1 
-                                : 12;
-                              const ytdTotal = getYTDActualTotal();
-                              return formatCurrency(monthsToUse > 0 ? ytdTotal / monthsToUse : 0);
+                              const currentMonth = new Date().getMonth();
+                              const isCurrentYear = selectedYear === currentYear;
+                              
+                              // For current year, only count months that have passed (including current month)
+                              // For past years, count all 12 months
+                              const monthsToCount = isCurrentYear ? currentMonth + 1 : 12;
+                              
+                              // Sum actual payments for the months we're considering
+                              const totalActual = summary.monthlyTotals
+                                .slice(0, monthsToCount)
+                                .reduce((sum, month) => sum + month.actual, 0);
+                              
+                              const averageMonthly = monthsToCount > 0 ? totalActual / monthsToCount : 0;
+                              return formatCurrency(averageMonthly);
                             })()}
                           </p>
                         </div>
@@ -1337,7 +1358,7 @@ export default function Bills() {
             )}
 
             {/* Add New Payment Form */}
-            {(editingPayment || selectedBillPayments.length === 0) && (
+            {(editingPayment !== null || selectedBillPayments.length === 0 || showNewPaymentForm) && (
               <div>
                 <h3 className="text-lg font-medium mb-3">
                   {editingPayment ? 'Edit Payment' : 'Add New Payment'}
@@ -1434,6 +1455,7 @@ export default function Bills() {
                           variant="outline" 
                           onClick={() => {
                             setEditingPayment(null);
+                            setShowNewPaymentForm(false);
                             paymentForm.reset({
                               amount: selectedBillForPayment ? parseFloat(selectedBillForPayment.amount) : 0,
                               billId: selectedBillForPayment?.id || "",
@@ -1459,12 +1481,15 @@ export default function Bills() {
             )}
 
             {/* Quick Actions */}
-            {selectedBillPayments.length > 0 && !editingPayment && (
+            {selectedBillPayments.length > 0 && !editingPayment && !showNewPaymentForm && (
               <div className="border-t pt-4">
                 <div className="flex justify-between items-center">
                   <Button 
                     variant="outline" 
                     onClick={() => {
+                      // Clear editing state and show new payment form
+                      setEditingPayment(null);
+                      setShowNewPaymentForm(true);
                       paymentForm.reset({
                         amount: selectedBillForPayment ? parseFloat(selectedBillForPayment.amount) : 0,
                         billId: selectedBillForPayment?.id || "",
@@ -1472,7 +1497,6 @@ export default function Bills() {
                         dueDate: new Date().toISOString().split('T')[0],
                         status: "paid",
                       });
-                      setEditingPayment({} as BillPayment);
                     }}
                   >
                     <Plus size={16} className="mr-2" />
@@ -1605,6 +1629,7 @@ export default function Bills() {
                         <SelectContent>
                           <SelectItem value="monthly">Monthly</SelectItem>
                           <SelectItem value="quarterly">Quarterly</SelectItem>
+                          <SelectItem value="half_yearly">Half Yearly</SelectItem>
                           <SelectItem value="yearly">Yearly</SelectItem>
                           <SelectItem value="one_time">One Time</SelectItem>
                         </SelectContent>
