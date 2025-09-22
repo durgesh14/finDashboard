@@ -2,6 +2,8 @@
 
 This is a personal finance management application called "WealthTrack" that helps users track their savings and investment instruments including Recurring Deposits (RD), Fixed Deposits (FD), Mutual Funds (MF), Life Insurance (LIC), and other financial instruments. The application provides a comprehensive dashboard for monitoring contributions, due dates, maturity dates, and overall net worth from these investments.
 
+**Recent Enhancement (September 2025)**: The application now supports fully customizable investment types and bill categories, allowing users to create, edit, and delete their own categories through a comprehensive Settings page. These custom types automatically update all dropdowns in the Investment and Bills sections, and users can export/import their complete financial data including custom categories.
+
 # User Preferences
 
 Preferred communication style: Simple, everyday language.
@@ -36,15 +38,20 @@ Preferred communication style: Simple, everyday language.
 - **Security**: CSRF protection and secure session handling (implementation pending)
 
 ## Data Models
-The application uses a three-tier data model:
+The application uses a five-tier data model:
 - **Users**: Basic user information and authentication
-- **Investments**: Core investment tracking with type categorization, payment schedules, and maturity tracking
-- **Transactions**: Individual payment records linked to investments
+- **Investment Types**: User-customizable investment categories (replaces hardcoded types)
+- **Bill Categories**: User-customizable bill/expense categories (replaces hardcoded categories)
+- **Investments**: Core investment tracking with dynamic type categorization, payment schedules, and maturity tracking
+- **Bills**: Expense tracking with dynamic category assignment and payment scheduling
+- **Transactions**: Individual payment records linked to investments and bills
 
 ## Component Architecture
-- **Design System**: Modular component library with consistent theming
+- **Design System**: Modular component library with consistent theming and dynamic color generation
 - **Layout**: Responsive design with mobile-first approach
 - **Reusability**: Shared UI components with variant-based styling using class-variance-authority
+- **Settings Interface**: Comprehensive tabbed interface with CRUD operations for custom types and data management
+- **Dynamic Integration**: Investment and Bills pages automatically reflect custom types through API integration
 
 # External Dependencies
 

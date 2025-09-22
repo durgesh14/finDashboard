@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Investment, type InsertInvestment, type Transaction, type InsertTransaction, type Bill, type InsertBill, type BillPayment, type InsertBillPayment } from "@shared/schema";
+import { type User, type InsertUser, type Investment, type InsertInvestment, type Transaction, type InsertTransaction, type Bill, type InsertBill, type BillPayment, type InsertBillPayment, type InvestmentType, type InsertInvestmentType, type BillCategory, type InsertBillCategory } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { calculateNextBillDueDate, formatDateForStorage } from "./date-utils";
 
@@ -33,6 +33,22 @@ export interface IStorage {
   createBillPayment(payment: InsertBillPayment): Promise<BillPayment>;
   updateBillPayment(id: string, payment: Partial<InsertBillPayment>): Promise<BillPayment | undefined>;
   deleteBillPayment(id: string): Promise<boolean>;
+
+  // Custom Investment Types methods
+  getInvestmentTypes(userId: string): Promise<InvestmentType[]>;
+  createInvestmentType(userId: string, type: InsertInvestmentType): Promise<InvestmentType>;
+  updateInvestmentType(id: string, type: Partial<InsertInvestmentType>): Promise<InvestmentType | undefined>;
+  deleteInvestmentType(id: string): Promise<boolean>;
+
+  // Custom Bill Categories methods
+  getBillCategories(userId: string): Promise<BillCategory[]>;
+  createBillCategory(userId: string, category: InsertBillCategory): Promise<BillCategory>;
+  updateBillCategory(id: string, category: Partial<InsertBillCategory>): Promise<BillCategory | undefined>;
+  deleteBillCategory(id: string): Promise<boolean>;
+
+  // Data export/import methods
+  exportAllData(userId: string): Promise<any>;
+  importAllData(userId: string, data: any): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -41,6 +57,8 @@ export class MemStorage implements IStorage {
   private transactions: Map<string, Transaction>;
   private bills: Map<string, Bill>;
   private billPayments: Map<string, BillPayment>;
+  private investmentTypes: Map<string, InvestmentType>;
+  private billCategories: Map<string, BillCategory>;
 
   constructor() {
     this.users = new Map();
@@ -48,6 +66,44 @@ export class MemStorage implements IStorage {
     this.transactions = new Map();
     this.bills = new Map();
     this.billPayments = new Map();
+    this.investmentTypes = new Map();
+    this.billCategories = new Map();
+    this.initializeDefaultTypes();
+  }
+
+  // Initialize default investment types and bill categories
+  private async initializeDefaultTypes(): Promise<void> {
+    const defaultInvestmentTypes = [
+      { name: "Mutual Fund", isDefault: true },
+      { name: "Fixed Deposit", isDefault: true },
+      { name: "Recurring Deposit", isDefault: true },
+      { name: "LIC/Insurance", isDefault: true },
+      { name: "PPF", isDefault: true },
+      { name: "Stocks", isDefault: true },
+      { name: "Other", isDefault: true }
+    ];
+
+    const defaultBillCategories = [
+      { name: "Utilities", isDefault: true },
+      { name: "Subscriptions", isDefault: true },
+      { name: "Insurance", isDefault: true },
+      { name: "Loans", isDefault: true },
+      { name: "Groceries", isDefault: true },
+      { name: "Transport", isDefault: true },
+      { name: "Healthcare", isDefault: true },
+      { name: "Entertainment", isDefault: true },
+      { name: "Other", isDefault: true }
+    ];
+
+    const defaultUserId = "demo-user";
+
+    for (const type of defaultInvestmentTypes) {
+      await this.createInvestmentType(defaultUserId, type);
+    }
+
+    for (const category of defaultBillCategories) {
+      await this.createBillCategory(defaultUserId, category);
+    }
   }
 
   async getUser(id: string): Promise<User | undefined> {
@@ -321,6 +377,166 @@ export class MemStorage implements IStorage {
           lastPaidDate: null // Clear last paid date
         });
       }
+    }
+  }
+
+  // Investment Types methods
+  async getInvestmentTypes(userId: string): Promise<InvestmentType[]> {
+    return Array.from(this.investmentTypes.values()).filter(
+      (type) => type.userId === userId
+    );
+  }
+
+  async createInvestmentType(userId: string, insertType: InsertInvestmentType): Promise<InvestmentType> {
+    const id = randomUUID();
+    const type: InvestmentType = {
+      ...insertType,
+      id,
+      userId,
+      isDefault: insertType.isDefault ?? false,
+      createdAt: new Date()
+    };
+    this.investmentTypes.set(id, type);
+    return type;
+  }
+
+  async updateInvestmentType(id: string, updateData: Partial<InsertInvestmentType>): Promise<InvestmentType | undefined> {
+    const type = this.investmentTypes.get(id);
+    if (!type) return undefined;
+
+    const updatedType: InvestmentType = {
+      ...type,
+      ...updateData
+    };
+    this.investmentTypes.set(id, updatedType);
+    return updatedType;
+  }
+
+  async deleteInvestmentType(id: string): Promise<boolean> {
+    return this.investmentTypes.delete(id);
+  }
+
+  // Bill Categories methods
+  async getBillCategories(userId: string): Promise<BillCategory[]> {
+    return Array.from(this.billCategories.values()).filter(
+      (category) => category.userId === userId
+    );
+  }
+
+  async createBillCategory(userId: string, insertCategory: InsertBillCategory): Promise<BillCategory> {
+    const id = randomUUID();
+    const category: BillCategory = {
+      ...insertCategory,
+      id,
+      userId,
+      isDefault: insertCategory.isDefault ?? false,
+      createdAt: new Date()
+    };
+    this.billCategories.set(id, category);
+    return category;
+  }
+
+  async updateBillCategory(id: string, updateData: Partial<InsertBillCategory>): Promise<BillCategory | undefined> {
+    const category = this.billCategories.get(id);
+    if (!category) return undefined;
+
+    const updatedCategory: BillCategory = {
+      ...category,
+      ...updateData
+    };
+    this.billCategories.set(id, updatedCategory);
+    return updatedCategory;
+  }
+
+  async deleteBillCategory(id: string): Promise<boolean> {
+    return this.billCategories.delete(id);
+  }
+
+  // Data export/import methods
+  async exportAllData(userId: string): Promise<any> {
+    const [investments, bills, billPayments, investmentTypes, billCategories, transactions] = await Promise.all([
+      this.getInvestments(userId),
+      this.getBills(userId),
+      Promise.all((await this.getBills(userId)).map(bill => this.getBillPayments(bill.id))).then(results => results.flat()),
+      this.getInvestmentTypes(userId),
+      this.getBillCategories(userId),
+      this.getAllTransactionsForUser(userId)
+    ]);
+
+    return {
+      version: "1.0.0",
+      exportedAt: new Date().toISOString(),
+      data: {
+        investments,
+        bills,
+        billPayments,
+        investmentTypes: investmentTypes.filter(type => !type.isDefault),
+        billCategories: billCategories.filter(category => !category.isDefault),
+        transactions
+      }
+    };
+  }
+
+  async importAllData(userId: string, importData: any): Promise<boolean> {
+    try {
+      const data = importData.data;
+      
+      // Import custom investment types
+      if (data.investmentTypes) {
+        for (const type of data.investmentTypes) {
+          await this.createInvestmentType(userId, {
+            name: type.name,
+            isDefault: false
+          });
+        }
+      }
+
+      // Import custom bill categories  
+      if (data.billCategories) {
+        for (const category of data.billCategories) {
+          await this.createBillCategory(userId, {
+            name: category.name,
+            isDefault: false
+          });
+        }
+      }
+
+      // Import investments
+      if (data.investments) {
+        for (const investment of data.investments) {
+          const { id, userId: _, createdAt, updatedAt, ...insertData } = investment;
+          await this.createInvestment(userId, insertData);
+        }
+      }
+
+      // Import bills
+      if (data.bills) {
+        for (const bill of data.bills) {
+          const { id, userId: _, createdAt, updatedAt, ...insertData } = bill;
+          await this.createBill(userId, insertData);
+        }
+      }
+
+      // Import transactions
+      if (data.transactions) {
+        for (const transaction of data.transactions) {
+          const { id, createdAt, ...insertData } = transaction;
+          await this.createTransaction(insertData);
+        }
+      }
+
+      // Import bill payments
+      if (data.billPayments) {
+        for (const payment of data.billPayments) {
+          const { id, createdAt, ...insertData } = payment;
+          await this.createBillPayment(insertData);
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Import failed:', error);
+      return false;
     }
   }
 }

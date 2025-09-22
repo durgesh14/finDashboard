@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertInvestmentSchema, insertTransactionSchema, insertBillSchema, insertBillPaymentSchema } from "@shared/schema";
+import { insertInvestmentSchema, insertTransactionSchema, insertBillSchema, insertBillPaymentSchema, insertInvestmentTypeSchema, insertBillCategorySchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -574,6 +574,156 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete bill" });
+    }
+  });
+
+  // Custom Investment Types routes
+  
+  // Get all investment types
+  app.get("/api/investment-types", async (req, res) => {
+    try {
+      const userId = "demo-user";
+      const types = await storage.getInvestmentTypes(userId);
+      res.json(types);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch investment types" });
+    }
+  });
+
+  // Create investment type
+  app.post("/api/investment-types", async (req, res) => {
+    try {
+      const validatedData = insertInvestmentTypeSchema.parse(req.body);
+      const userId = "demo-user";
+      const type = await storage.createInvestmentType(userId, validatedData);
+      res.status(201).json(type);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create investment type" });
+    }
+  });
+
+  // Update investment type
+  app.put("/api/investment-types/:id", async (req, res) => {
+    try {
+      const validatedData = insertInvestmentTypeSchema.partial().parse(req.body);
+      const type = await storage.updateInvestmentType(req.params.id, validatedData);
+      if (!type) {
+        return res.status(404).json({ error: "Investment type not found" });
+      }
+      res.json(type);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to update investment type" });
+    }
+  });
+
+  // Delete investment type
+  app.delete("/api/investment-types/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deleteInvestmentType(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Investment type not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete investment type" });
+    }
+  });
+
+  // Custom Bill Categories routes
+  
+  // Get all bill categories
+  app.get("/api/bill-categories", async (req, res) => {
+    try {
+      const userId = "demo-user";
+      const categories = await storage.getBillCategories(userId);
+      res.json(categories);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch bill categories" });
+    }
+  });
+
+  // Create bill category
+  app.post("/api/bill-categories", async (req, res) => {
+    try {
+      const validatedData = insertBillCategorySchema.parse(req.body);
+      const userId = "demo-user";
+      const category = await storage.createBillCategory(userId, validatedData);
+      res.status(201).json(category);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create bill category" });
+    }
+  });
+
+  // Update bill category
+  app.put("/api/bill-categories/:id", async (req, res) => {
+    try {
+      const validatedData = insertBillCategorySchema.partial().parse(req.body);
+      const category = await storage.updateBillCategory(req.params.id, validatedData);
+      if (!category) {
+        return res.status(404).json({ error: "Bill category not found" });
+      }
+      res.json(category);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to update bill category" });
+    }
+  });
+
+  // Delete bill category
+  app.delete("/api/bill-categories/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deleteBillCategory(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Bill category not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete bill category" });
+    }
+  });
+
+  // Data Export/Import routes
+  
+  // Export all data
+  app.get("/api/data/export", async (req, res) => {
+    try {
+      const userId = "demo-user";
+      const exportData = await storage.exportAllData(userId);
+      
+      // Set headers for file download
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="financial-data-export-${new Date().toISOString().split('T')[0]}.json"`);
+      
+      res.json(exportData);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to export data" });
+    }
+  });
+
+  // Import all data
+  app.post("/api/data/import", async (req, res) => {
+    try {
+      const userId = "demo-user";
+      const success = await storage.importAllData(userId, req.body);
+      
+      if (!success) {
+        return res.status(400).json({ error: "Failed to import data" });
+      }
+      
+      res.json({ message: "Data imported successfully" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to import data" });
     }
   });
 

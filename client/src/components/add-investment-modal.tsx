@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertInvestmentSchema, InsertInvestment, Investment } from "@shared/schema";
+import { insertInvestmentSchema, InsertInvestment, Investment, InvestmentType } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { X } from "lucide-react";
@@ -23,6 +23,10 @@ export function AddInvestmentModal({ open, onOpenChange, editingInvestment }: Ad
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isEditMode = !!editingInvestment;
+
+  const { data: investmentTypes, isLoading: investmentTypesLoading } = useQuery<InvestmentType[]>({
+    queryKey: ["/api/investment-types"],
+  });
 
   const form = useForm<InsertInvestment>({
     resolver: zodResolver(insertInvestmentSchema),
@@ -126,13 +130,11 @@ export function AddInvestmentModal({ open, onOpenChange, editingInvestment }: Ad
                   <SelectValue placeholder="Select Type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="mutual_fund">Mutual Fund</SelectItem>
-                  <SelectItem value="fixed_deposit">Fixed Deposit</SelectItem>
-                  <SelectItem value="recurring_deposit">Recurring Deposit</SelectItem>
-                  <SelectItem value="lic">Life Insurance (LIC)</SelectItem>
-                  <SelectItem value="ppf">Public Provident Fund</SelectItem>
-                  <SelectItem value="stocks">Stocks</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
+                  {investmentTypes?.map((type) => (
+                    <SelectItem key={type.id} value={type.id}>
+                      {type.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               {form.formState.errors.type && (

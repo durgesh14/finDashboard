@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Bill, BillPayment, InsertBill } from "@shared/schema";
+import { Bill, BillPayment, InsertBill, BillCategory } from "@shared/schema";
 import { 
   Plus, 
   Search, 
@@ -47,40 +47,47 @@ import { insertBillSchema, insertBillPaymentSchema } from "@shared/schema";
 import { z } from "zod";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
 
-const CATEGORY_COLORS = {
-  utilities: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  subscriptions: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-  insurance: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  loans: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-  groceries: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-  transport: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200',
-  healthcare: 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200',
-  entertainment: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
-  other: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+// Dynamic color generation for bill categories
+const getCategoryColor = (index: number) => {
+  const colors = [
+    'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+    'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+    'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+    'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+    'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+    'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200',
+    'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200',
+    'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
+    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+    'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+  ];
+  return colors[index % colors.length];
 };
 
-const CATEGORY_ICONS = {
-  utilities: Zap,
-  subscriptions: Play,
-  insurance: ShoppingCart,
-  loans: CreditCard,
-  groceries: ShoppingCart,
-  transport: Car,
-  healthcare: Heart,
-  entertainment: Play,
-  other: Receipt
-};
-
-const CATEGORY_LABELS = {
-  utilities: 'Utilities',
-  subscriptions: 'Subscriptions',
-  insurance: 'Insurance',
-  loans: 'Loans',
-  groceries: 'Groceries',
-  transport: 'Transport',
-  healthcare: 'Healthcare',
-  entertainment: 'Entertainment',
-  other: 'Other'
+// Dynamic icon mapping for bill categories
+const getCategoryIcon = (name: string) => {
+  const defaultIcons: { [key: string]: any } = {
+    utilities: Zap,
+    subscriptions: Play,
+    insurance: ShoppingCart,
+    loans: CreditCard,
+    groceries: ShoppingCart,
+    transport: Car,
+    healthcare: Heart,
+    entertainment: Play,
+    other: Receipt
+  };
+  
+  // Try to match by name (case insensitive)
+  const lowerName = name.toLowerCase();
+  for (const [key, icon] of Object.entries(defaultIcons)) {
+    if (lowerName.includes(key)) {
+      return icon;
+    }
+  }
+  
+  // Default icon
+  return Receipt;
 };
 
 const CHART_COLORS = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444', '#06B6D4', '#6B7280', '#EC4899', '#84CC16'];
@@ -128,6 +135,10 @@ export default function Bills() {
 
   const { data: bills, isLoading: billsLoading } = useQuery<Bill[]>({
     queryKey: ["/api/bills"],
+  });
+
+  const { data: billCategories, isLoading: billCategoriesLoading } = useQuery<BillCategory[]>({
+    queryKey: ["/api/bill-categories"],
   });
 
   const { data: summary, isLoading: summaryLoading } = useQuery<BillsSummary>({
@@ -491,12 +502,15 @@ export default function Bills() {
   const getCategoryChartData = () => {
     if (!summary?.categoryBreakdown) return [];
     
-    return Object.entries(summary.categoryBreakdown).map(([category, data], index) => ({
-      name: CATEGORY_LABELS[category as keyof typeof CATEGORY_LABELS] || category,
-      value: Math.round(data.total),
-      count: data.count,
-      color: CHART_COLORS[index % CHART_COLORS.length]
-    }));
+    return Object.entries(summary.categoryBreakdown).map(([category, data], index) => {
+      const categoryLabel = billCategories?.find(c => c.id === category)?.name || category;
+      return {
+        name: categoryLabel,
+        value: Math.round(data.total),
+        count: data.count,
+        color: CHART_COLORS[index % CHART_COLORS.length]
+      };
+    });
   };
 
   const filteredBills = getFilteredBills();
@@ -909,15 +923,11 @@ export default function Bills() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">All Categories</SelectItem>
-                          <SelectItem value="utilities">Utilities</SelectItem>
-                          <SelectItem value="subscriptions">Subscriptions</SelectItem>
-                          <SelectItem value="insurance">Insurance</SelectItem>
-                          <SelectItem value="loans">Loans</SelectItem>
-                          <SelectItem value="groceries">Groceries</SelectItem>
-                          <SelectItem value="transport">Transport</SelectItem>
-                          <SelectItem value="healthcare">Healthcare</SelectItem>
-                          <SelectItem value="entertainment">Entertainment</SelectItem>
-                          <SelectItem value="other">Other</SelectItem>
+                          {billCategories?.map((category) => (
+                            <SelectItem key={category.id} value={category.id}>
+                              {category.name}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
 
@@ -992,9 +1002,15 @@ export default function Bills() {
                                   </div>
                                 </td>
                                 <td className="px-6 py-4">
-                                  <Badge className={CATEGORY_COLORS[bill.category as keyof typeof CATEGORY_COLORS]}>
-                                    {CATEGORY_LABELS[bill.category as keyof typeof CATEGORY_LABELS]}
-                                  </Badge>
+                                  {(() => {
+                                    const categoryIndex = billCategories?.findIndex(c => c.id === bill.category) ?? 0;
+                                    const categoryLabel = billCategories?.find(c => c.id === bill.category)?.name || bill.category;
+                                    return (
+                                      <Badge className={getCategoryColor(categoryIndex)}>
+                                        {categoryLabel}
+                                      </Badge>
+                                    );
+                                  })()}
                                 </td>
                                 <td className="px-6 py-4 text-right text-foreground font-medium">
                                   {formatCurrency(bill.amount)}
@@ -1576,15 +1592,11 @@ export default function Bills() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="utilities">Utilities</SelectItem>
-                          <SelectItem value="subscriptions">Subscriptions</SelectItem>
-                          <SelectItem value="insurance">Insurance</SelectItem>
-                          <SelectItem value="loans">Loans</SelectItem>
-                          <SelectItem value="groceries">Groceries</SelectItem>
-                          <SelectItem value="transport">Transport</SelectItem>
-                          <SelectItem value="healthcare">Healthcare</SelectItem>
-                          <SelectItem value="entertainment">Entertainment</SelectItem>
-                          <SelectItem value="other">Other</SelectItem>
+                          {billCategories?.map((category) => (
+                            <SelectItem key={category.id} value={category.id}>
+                              {category.name}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />

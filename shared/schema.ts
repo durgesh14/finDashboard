@@ -100,6 +100,36 @@ export const insertBillPaymentSchema = createInsertSchema(billPayments).omit({
   dueDate: z.string().min(1, "Due date is required"),
 });
 
+// Custom Investment Types table
+export const investmentTypes = pgTable("investment_types", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  name: text("name").notNull(),
+  isDefault: boolean("is_default").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Custom Bill Categories table
+export const billCategories = pgTable("bill_categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  name: text("name").notNull(),
+  isDefault: boolean("is_default").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertInvestmentTypeSchema = createInsertSchema(investmentTypes).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+});
+
+export const insertBillCategorySchema = createInsertSchema(billCategories).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type Investment = typeof investments.$inferSelect;
@@ -110,3 +140,7 @@ export type Bill = typeof bills.$inferSelect;
 export type InsertBill = z.infer<typeof insertBillSchema>;
 export type BillPayment = typeof billPayments.$inferSelect;
 export type InsertBillPayment = z.infer<typeof insertBillPaymentSchema>;
+export type InvestmentType = typeof investmentTypes.$inferSelect;
+export type InsertInvestmentType = z.infer<typeof insertInvestmentTypeSchema>;
+export type BillCategory = typeof billCategories.$inferSelect;
+export type InsertBillCategory = z.infer<typeof insertBillCategorySchema>;

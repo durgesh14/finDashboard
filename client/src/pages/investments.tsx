@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Investment } from "@shared/schema";
+import { Investment, InvestmentType } from "@shared/schema";
 import { 
   Search, 
   Filter, 
@@ -29,24 +29,21 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { AddInvestmentModal } from "@/components/add-investment-modal";
 
-const TYPE_COLORS = {
-  mutual_fund: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  fixed_deposit: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  recurring_deposit: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-  lic: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-  ppf: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-  stocks: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200',
-  other: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
-};
-
-const TYPE_LABELS = {
-  mutual_fund: 'Mutual Fund',
-  fixed_deposit: 'Fixed Deposit',
-  recurring_deposit: 'Recurring Deposit',
-  lic: 'LIC/Insurance',
-  ppf: 'PPF',
-  stocks: 'Stocks',
-  other: 'Other'
+// Dynamic color generation for investment types
+const getTypeColor = (index: number) => {
+  const colors = [
+    'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+    'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+    'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+    'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+    'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+    'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200',
+    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+    'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200',
+    'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
+    'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+  ];
+  return colors[index % colors.length];
 };
 
 export default function Investments() {
@@ -64,6 +61,10 @@ export default function Investments() {
 
   const { data: investments, isLoading } = useQuery<Investment[]>({
     queryKey: ["/api/investments"],
+  });
+
+  const { data: investmentTypes, isLoading: investmentTypesLoading } = useQuery<InvestmentType[]>({
+    queryKey: ["/api/investment-types"],
   });
 
   const deleteMutation = useMutation({
@@ -178,18 +179,21 @@ export default function Investments() {
       return;
     }
     
-    const csvData = filteredInvestments.map(inv => ({
-      Name: inv.name,
-      Type: TYPE_LABELS[inv.type as keyof typeof TYPE_LABELS],
-      'Principal Amount': inv.principalAmount,
-      'Current Value': calculateCurrentValue(inv).toFixed(2),
-      'Returns (%)': calculateReturns(inv).toFixed(2),
-      'Start Date': inv.startDate,
-      'Payment Frequency': inv.paymentFrequency,
-      'Expected Return': inv.expectedReturn || 'N/A',
-      'Maturity Date': inv.maturityDate || 'N/A',
-      Status: inv.isActive ? 'Active' : 'Inactive'
-    }));
+    const csvData = filteredInvestments.map(inv => {
+      const typeLabel = investmentTypes?.find(t => t.id === inv.type)?.name || inv.type;
+      return {
+        Name: inv.name,
+        Type: typeLabel,
+        'Principal Amount': inv.principalAmount,
+        'Current Value': calculateCurrentValue(inv).toFixed(2),
+        'Returns (%)': calculateReturns(inv).toFixed(2),
+        'Start Date': inv.startDate,
+        'Payment Frequency': inv.paymentFrequency,
+        'Expected Return': inv.expectedReturn || 'N/A',
+        'Maturity Date': inv.maturityDate || 'N/A',
+        Status: inv.isActive ? 'Active' : 'Inactive'
+      };
+    });
 
     const escapeCSV = (value: string | number) => {
       const stringValue = String(value);
@@ -367,13 +371,11 @@ export default function Investments() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Types</SelectItem>
-                      <SelectItem value="mutual_fund">Mutual Funds</SelectItem>
-                      <SelectItem value="fixed_deposit">Fixed Deposits</SelectItem>
-                      <SelectItem value="recurring_deposit">Recurring Deposits</SelectItem>
-                      <SelectItem value="lic">Insurance</SelectItem>
-                      <SelectItem value="ppf">PPF</SelectItem>
-                      <SelectItem value="stocks">Stocks</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
+                      {investmentTypes?.map((type) => (
+                        <SelectItem key={type.id} value={type.id}>
+                          {type.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
 
@@ -469,9 +471,15 @@ export default function Investments() {
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            <Badge className={TYPE_COLORS[investment.type as keyof typeof TYPE_COLORS]}>
-                              {TYPE_LABELS[investment.type as keyof typeof TYPE_LABELS]}
-                            </Badge>
+                            {(() => {
+                              const typeIndex = investmentTypes?.findIndex(t => t.id === investment.type) ?? 0;
+                              const typeLabel = investmentTypes?.find(t => t.id === investment.type)?.name || investment.type;
+                              return (
+                                <Badge className={getTypeColor(typeIndex)}>
+                                  {typeLabel}
+                                </Badge>
+                              );
+                            })()}
                           </td>
                           <td className="px-6 py-4 text-right text-foreground font-medium">
                             {formatCurrency(investment.principalAmount)}
