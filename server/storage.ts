@@ -1,8 +1,12 @@
 import { type User, type InsertUser, type Investment, type InsertInvestment, type Transaction, type InsertTransaction, type Bill, type InsertBill, type BillPayment, type InsertBillPayment, type InvestmentType, type InsertInvestmentType, type BillCategory, type InsertBillCategory } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { calculateNextBillDueDate, formatDateForStorage } from "./date-utils";
+import session from "express-session";
+import createMemoryStore from "memorystore";
 
 export interface IStorage {
+  sessionStore: session.Store;
+  
   // User methods
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
@@ -51,7 +55,10 @@ export interface IStorage {
   importAllData(userId: string, data: any): Promise<boolean>;
 }
 
+const MemoryStore = createMemoryStore(session);
+
 export class MemStorage implements IStorage {
+  sessionStore: session.Store;
   private users: Map<string, User>;
   private investments: Map<string, Investment>;
   private transactions: Map<string, Transaction>;
@@ -61,6 +68,9 @@ export class MemStorage implements IStorage {
   private billCategories: Map<string, BillCategory>;
 
   constructor() {
+    this.sessionStore = new MemoryStore({
+      checkPeriod: 86400000, // prune expired entries every 24h
+    });
     this.users = new Map();
     this.investments = new Map();
     this.transactions = new Map();

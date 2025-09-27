@@ -10,8 +10,13 @@ import {
 } from "@shared/schema";
 import { IStorage } from "./storage";
 import { calculateNextBillDueDate, formatDateForStorage } from "./date-utils";
+import session from "express-session";
+import createMemoryStore from "memorystore";
+
+const MemoryStore = createMemoryStore(session);
 
 export class MongoStorage implements IStorage {
+  sessionStore: session.Store;
   private client: MongoClient;
   private db: Db;
   private users: Collection<User>;
@@ -23,13 +28,18 @@ export class MongoStorage implements IStorage {
   private billCategories: Collection<BillCategory>;
 
   constructor() {
-    const connectionString = `mongodb+srv://dsdurgeshsingh14_db_user:${process.env.MONGODB_PASSWORD}@cluster0.aysyniz.mongodb.net/wealthtrack?retryWrites=true&w=majority`;
+    // For now, use memory store for sessions even with MongoDB
+    // In production, you could use connect-pg-simple or connect-mongo for persistent sessions
+    this.sessionStore = new MemoryStore({
+      checkPeriod: 86400000, // prune expired entries every 24h
+    });
+    const connectionString = process.env.MONGODB_URI || '';
     
     this.client = new MongoClient(connectionString, {
       serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
       socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
     });
-    this.db = this.client.db('wealthtrack');
+    this.db = this.client.db(process.env.MONGODB_DB_NAME || 'findashboardDB');
     
     // Initialize collections
     this.users = this.db.collection<User>('users');

@@ -3,20 +3,32 @@ import { createServer, type Server } from "http";
 import { initializeStorage, setStorage, IStorage } from "./storage";
 import { insertInvestmentSchema, insertTransactionSchema, insertBillSchema, insertBillPaymentSchema, insertInvestmentTypeSchema, insertBillCategorySchema } from "@shared/schema";
 import { z } from "zod";
+import { setupAuth } from "./auth";
 
 // Global storage instance that will be used by all routes
 let appStorage: IStorage;
+
+// Middleware to require authentication
+function requireAuth(req: any, res: any, next: any) {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+  next();
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize storage (MongoDB or fallback to memory)
   appStorage = await initializeStorage();
   setStorage(appStorage);
   
+  // Reference integration: blueprint:javascript_auth_all_persistance
+  // Setup authentication routes: /api/register, /api/login, /api/logout, /api/user
+  setupAuth(app);
+  
   // Get all investments
-  app.get("/api/investments", async (req, res) => {
+  app.get("/api/investments", requireAuth, async (req: any, res) => {
     try {
-      // For demo purposes, using a default user ID
-      const userId = "demo-user";
+      const userId = req.user.id;
       const investments = await appStorage.getInvestments(userId);
       res.json(investments);
     } catch (error) {
@@ -25,7 +37,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get single investment
-  app.get("/api/investments/:id", async (req, res) => {
+  app.get("/api/investments/:id", requireAuth, async (req: any, res) => {
     try {
       const investment = await appStorage.getInvestment(req.params.id);
       if (!investment) {
@@ -38,10 +50,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create new investment
-  app.post("/api/investments", async (req, res) => {
+  app.post("/api/investments", requireAuth, async (req: any, res) => {
     try {
       const validatedData = insertInvestmentSchema.parse(req.body);
-      const userId = "demo-user"; // For demo purposes
+      const userId = req.user.id;
       const investment = await appStorage.createInvestment(userId, validatedData);
       res.status(201).json(investment);
     } catch (error) {
@@ -53,7 +65,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update investment
-  app.put("/api/investments/:id", async (req, res) => {
+  app.put("/api/investments/:id", requireAuth, async (req: any, res) => {
     try {
       const validatedData = insertInvestmentSchema.partial().parse(req.body);
       const investment = await appStorage.updateInvestment(req.params.id, validatedData);
@@ -70,7 +82,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete investment
-  app.delete("/api/investments/:id", async (req, res) => {
+  app.delete("/api/investments/:id", requireAuth, async (req: any, res) => {
     try {
       const deleted = await appStorage.deleteInvestment(req.params.id);
       if (!deleted) {
@@ -83,7 +95,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get transactions for an investment
-  app.get("/api/investments/:id/transactions", async (req, res) => {
+  app.get("/api/investments/:id/transactions", requireAuth, async (req: any, res) => {
     try {
       const transactions = await appStorage.getTransactions(req.params.id);
       res.json(transactions);
@@ -93,7 +105,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create transaction
-  app.post("/api/transactions", async (req, res) => {
+  app.post("/api/transactions", requireAuth, async (req: any, res) => {
     try {
       const validatedData = insertTransactionSchema.parse(req.body);
       const transaction = await appStorage.createTransaction(validatedData);
@@ -107,9 +119,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get dashboard summary
-  app.get("/api/dashboard/summary", async (req, res) => {
+  app.get("/api/dashboard/summary", requireAuth, async (req: any, res) => {
     try {
-      const userId = "demo-user";
+      const userId = req.user.id;
       const investments = await appStorage.getInvestments(userId);
       
       // Calculate total invested (sum of all principal amounts)
@@ -280,9 +292,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Bills routes
   
   // Get all bills
-  app.get("/api/bills", async (req, res) => {
+  app.get("/api/bills", requireAuth, async (req: any, res) => {
     try {
-      const userId = "demo-user";
+      const userId = req.user.id;
       const bills = await appStorage.getBills(userId);
       res.json(bills);
     } catch (error) {
@@ -291,9 +303,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get bills summary/insights (MUST be before parameterized routes)
-  app.get("/api/bills/summary", async (req, res) => {
+  app.get("/api/bills/summary", requireAuth, async (req: any, res) => {
     try {
-      const userId = "demo-user";
+      const userId = req.user.id;
       const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
       const bills = await appStorage.getBills(userId);
       
@@ -447,7 +459,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get single bill
-  app.get("/api/bills/:id", async (req, res) => {
+  app.get("/api/bills/:id", requireAuth, async (req: any, res) => {
     try {
       const bill = await appStorage.getBill(req.params.id);
       if (!bill) {
@@ -460,7 +472,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get bill payments for a specific bill
-  app.get("/api/bills/:id/payments", async (req, res) => {
+  app.get("/api/bills/:id/payments", requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
       const payments = await appStorage.getBillPayments(id);
@@ -471,7 +483,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create a bill payment
-  app.post("/api/bills/:id/payments", async (req, res) => {
+  app.post("/api/bills/:id/payments", requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
       const paymentData = insertBillPaymentSchema.parse({
@@ -489,9 +501,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get all bill payments for a year (for summary calculations)
-  app.get("/api/bills/payments", async (req, res) => {
+  app.get("/api/bills/payments", requireAuth, async (req: any, res) => {
     try {
-      const userId = "demo-user";
+      const userId = req.user.id;
       const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
       
       const bills = await appStorage.getBills(userId);
@@ -520,10 +532,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create new bill
-  app.post("/api/bills", async (req, res) => {
+  app.post("/api/bills", requireAuth, async (req: any, res) => {
     try {
       const validatedData = insertBillSchema.parse(req.body);
-      const userId = "demo-user";
+      const userId = req.user.id;
       const bill = await appStorage.createBill(userId, validatedData);
       res.status(201).json(bill);
     } catch (error) {
@@ -535,7 +547,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update bill
-  app.put("/api/bills/:id", async (req, res) => {
+  app.put("/api/bills/:id", requireAuth, async (req: any, res) => {
     try {
       const validatedData = insertBillSchema.partial().parse(req.body);
       const bill = await appStorage.updateBill(req.params.id, validatedData);
@@ -552,7 +564,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete bill
-  app.delete("/api/bills/:id", async (req, res) => {
+  app.delete("/api/bills/:id", requireAuth, async (req: any, res) => {
     try {
       const deleted = await appStorage.deleteBill(req.params.id);
       if (!deleted) {
@@ -567,9 +579,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Custom Investment Types routes
   
   // Get all investment types
-  app.get("/api/investment-types", async (req, res) => {
+  app.get("/api/investment-types", requireAuth, async (req: any, res) => {
     try {
-      const userId = "demo-user";
+      const userId = req.user.id;
       const types = await appStorage.getInvestmentTypes(userId);
       res.json(types);
     } catch (error) {
@@ -578,10 +590,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create investment type
-  app.post("/api/investment-types", async (req, res) => {
+  app.post("/api/investment-types", requireAuth, async (req: any, res) => {
     try {
       const validatedData = insertInvestmentTypeSchema.parse(req.body);
-      const userId = "demo-user";
+      const userId = req.user.id;
       const type = await appStorage.createInvestmentType(userId, validatedData);
       res.status(201).json(type);
     } catch (error) {
@@ -625,9 +637,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Custom Bill Categories routes
   
   // Get all bill categories
-  app.get("/api/bill-categories", async (req, res) => {
+  app.get("/api/bill-categories", requireAuth, async (req: any, res) => {
     try {
-      const userId = "demo-user";
+      const userId = req.user.id;
       const categories = await appStorage.getBillCategories(userId);
       res.json(categories);
     } catch (error) {
@@ -636,10 +648,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create bill category
-  app.post("/api/bill-categories", async (req, res) => {
+  app.post("/api/bill-categories", requireAuth, async (req: any, res) => {
     try {
       const validatedData = insertBillCategorySchema.parse(req.body);
-      const userId = "demo-user";
+      const userId = req.user.id;
       const category = await appStorage.createBillCategory(userId, validatedData);
       res.status(201).json(category);
     } catch (error) {
