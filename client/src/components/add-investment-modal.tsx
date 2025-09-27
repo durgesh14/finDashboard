@@ -51,7 +51,7 @@ export function AddInvestmentModal({ open, onOpenChange, editingInvestment }: Ad
         name: editingInvestment.name,
         type: editingInvestment.type,
         principalAmount: editingInvestment.principalAmount,
-        paymentAmount: editingInvestment.paymentAmount ? parseFloat(editingInvestment.paymentAmount) : undefined,
+        paymentAmount: editingInvestment.paymentAmount ? parseFloat(editingInvestment.paymentAmount).toString() : undefined,
         startDate: editingInvestment.startDate,
         paymentFrequency: editingInvestment.paymentFrequency as "monthly" | "quarterly" | "half_yearly" | "yearly" | "one_time",
         dueDay: editingInvestment.dueDay,
@@ -100,6 +100,11 @@ export function AddInvestmentModal({ open, onOpenChange, editingInvestment }: Ad
   });
 
   const onSubmit = (data: InsertInvestment) => {
+    // For one-time investments, set paymentAmount to null
+    if (data.paymentFrequency === 'one_time') {
+      data.paymentAmount = null;
+      data.dueDay = null;
+    }
     createMutation.mutate(data);
   };
 

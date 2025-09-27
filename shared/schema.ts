@@ -78,7 +78,18 @@ export const insertInvestmentSchema = createInsertSchema(investments).omit({
   updatedAt: true,
 }).extend({
   paymentFrequency: z.enum(['monthly', 'quarterly', 'half_yearly', 'yearly', 'one_time']),
-  paymentAmount: z.coerce.number().positive("Payment amount must be positive").optional(),
+}).superRefine((data, ctx) => {
+  // Only validate paymentAmount for non-one-time investments
+  if (data.paymentFrequency !== 'one_time') {
+    const paymentAmount = typeof data.paymentAmount === 'string' ? parseFloat(data.paymentAmount) : data.paymentAmount;
+    if (!paymentAmount || paymentAmount <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Payment amount is required for recurring investments",
+        path: ['paymentAmount']
+      });
+    }
+  }
 });
 
 export const insertTransactionSchema = createInsertSchema(transactions).omit({

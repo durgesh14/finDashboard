@@ -292,53 +292,30 @@ export default function Investments() {
     activeCount: filteredInvestments.filter(inv => inv.isActive).length
   };
 
-  // Use the grouped transactions from the API, but filter based on current filters
-  const filteredGroupedTransactions = groupedTransactions?.map(group => ({
-    ...group,
-    transactions: group.transactions.filter(transaction => {
-      const investment = transaction.investment;
-      const matchesSearch = investment.name.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesType = typeFilter === "all" || !typeFilter || investment.type === typeFilter;
-      const matchesStatus = statusFilter === "all" || !statusFilter || 
-        (statusFilter === "active" && investment.isActive) ||
-        (statusFilter === "inactive" && !investment.isActive);
-      return matchesSearch && matchesType && matchesStatus;
-    })
-  })).filter(group => group.transactions.length > 0) || [];
+  // Create a map of all transactions organized by investment ID
+  const transactionsByInvestment = new Map();
+  groupedTransactions?.forEach(group => {
+    group.transactions.forEach(transaction => {
+      const investmentId = transaction.investmentId;
+      if (!transactionsByInvestment.has(investmentId)) {
+        transactionsByInvestment.set(investmentId, []);
+      }
+      transactionsByInvestment.get(investmentId).push(transaction);
+    });
+  });
 
-  // Fallback: If no transactions exist, group investments by start date for initial display
-  const fallbackGroupedInvestments = filteredInvestments.reduce((groups, investment) => {
-    const date = new Date(investment.startDate);
-    const monthYear = date.toLocaleDateString('en-GB', { year: 'numeric', month: 'long' });
-    const sortKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    
-    if (!groups[sortKey]) {
-      groups[sortKey] = {
-        displayName: monthYear,
-        sortKey,
-        investments: []
-      };
-    }
-    
-    groups[sortKey].investments.push(investment);
-    return groups;
-  }, {} as Record<string, { displayName: string; sortKey: string; investments: Investment[] }>);
+  // Create investments with their associated transactions
+  const investmentsWithTransactions = filteredInvestments.map(investment => ({
+    ...investment,
+    transactions: transactionsByInvestment.get(investment.id) || []
+  }));
 
-  const fallbackSortedGroups = Object.values(fallbackGroupedInvestments).sort((a, b) => 
-    b.sortKey.localeCompare(a.sortKey)
-  );
-
-  // Use transactions if available, otherwise show investments
-  const hasTransactions = filteredGroupedTransactions.length > 0;
-  const displayGroups = hasTransactions ? filteredGroupedTransactions : null;
-
-  // Calculate total transactions and unique investments for the filtered data
+  // Calculate stats for all filtered investments and their transactions
   const totalTransactionStats = {
-    totalTransactionAmount: filteredGroupedTransactions.reduce((sum, group) => 
-      sum + group.transactions.reduce((groupSum, tx) => groupSum + parseFloat(tx.amount), 0), 0),
-    totalTransactionCount: filteredGroupedTransactions.reduce((count, group) => count + group.transactions.length, 0),
-    uniqueInvestments: new Set(filteredGroupedTransactions.flatMap(group => 
-      group.transactions.map(tx => tx.investmentId))).size
+    totalTransactionAmount: investmentsWithTransactions.reduce((sum, inv) => 
+      sum + inv.transactions.reduce((txSum: number, tx: any) => txSum + parseFloat(tx.amount), 0), 0),
+    totalTransactionCount: investmentsWithTransactions.reduce((count, inv) => count + inv.transactions.length, 0),
+    uniqueInvestments: investmentsWithTransactions.filter(inv => inv.transactions.length > 0).length
   };
 
   if (isLoading) {
@@ -492,10 +469,15 @@ export default function Investments() {
           </Card>
         </div>
 
-        {/* Investments Grouped by Month */}
+        {/* Investments with Nested Transactions */}
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h3 className="text-xl font-semibold text-foreground">Investments ({filteredInvestments.length})</h3>
+            {totalTransactionStats.totalTransactionCount > 0 && (
+              <div className="text-sm text-muted-foreground">
+                {totalTransactionStats.totalTransactionCount} total transactions • {formatCurrency(totalTransactionStats.totalTransactionAmount)}
+              </div>
+            )}
           </div>
           
           {groupedTransactionsLoading ? (
@@ -511,110 +493,163 @@ export default function Investments() {
                 </div>
               </CardContent>
             </Card>
-          ) : hasTransactions ? (
-            // Show monthly transactions when available
-            filteredGroupedTransactions.map((group) => (
-              <Card key={group.sortKey}>
-                <CardHeader className="pb-4">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg font-medium text-foreground flex items-center">
-                      <Calendar className="mr-2" size={18} />
-                      {group.displayName}
-                    </CardTitle>
-                    <Badge variant="outline" className="text-xs">
-                      {group.transactions.length} transaction{group.transactions.length !== 1 ? 's' : ''}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-muted/50">
-                        <tr>
-                          <th className="text-left px-6 py-3 text-sm font-medium text-muted-foreground">Investment</th>
-                          <th className="text-left px-6 py-3 text-sm font-medium text-muted-foreground">Type</th>
-                          <th className="text-right px-6 py-3 text-sm font-medium text-muted-foreground">Amount</th>
-                          <th className="text-center px-6 py-3 text-sm font-medium text-muted-foreground">Date</th>
-                          <th className="text-center px-6 py-3 text-sm font-medium text-muted-foreground">Notes</th>
-                          <th className="text-right px-6 py-3 text-sm font-medium text-muted-foreground">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {group.transactions.map((transaction) => {
-                          const investment = transaction.investment;
-                          return (
-                            <tr key={transaction.id} className="hover:bg-muted/30 transition-colors" data-testid={`row-transaction-${transaction.id}`}>
-                              <td className="px-6 py-4">
-                                <div>
-                                  <p className="font-medium text-foreground">{investment.name}</p>
-                                  <p className="text-sm text-muted-foreground">
-                                    {investment.expectedReturn ? `${investment.expectedReturn}%` : 'N/A'} • {investment.paymentFrequency.replace('_', ' ')}
-                                  </p>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4">
-                                {(() => {
-                                  const typeIndex = investmentTypes?.findIndex(t => t.id === investment.type) ?? 0;
-                                  const typeLabel = investmentTypes?.find(t => t.id === investment.type)?.name || investment.type;
-                                  return (
-                                    <Badge className={getTypeColor(typeIndex)}>
-                                      {typeLabel}
-                                    </Badge>
-                                  );
-                                })()}
-                              </td>
-                              <td className="px-6 py-4 text-right text-foreground font-medium">
-                                {formatCurrency(transaction.amount)}
-                              </td>
-                              <td className="px-6 py-4 text-center text-sm text-muted-foreground">
-                                {new Date(transaction.transactionDate).toLocaleDateString('en-GB')}
-                              </td>
-                              <td className="px-6 py-4 text-center text-sm text-muted-foreground">
-                                {transaction.notes || '-'}
-                              </td>
-                              <td className="px-6 py-4 text-right">
-                                <div className="flex items-center justify-end space-x-2">
-                                  <Button 
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleAddTransaction(investment)}
-                                    disabled={addTransactionMutation.isPending}
-                                    data-testid={`button-record-payment-${investment.id}`}
-                                    className="text-green-600 border-green-600 hover:bg-green-50"
-                                  >
-                                    <CreditCard size={16} className="mr-1" />
-                                    Record Payment
-                                  </Button>
-                                  <Button 
-                                    variant="ghost"
-                                    size="sm"
-                                    title="View Investment Details"
-                                    onClick={() => handleEditInvestment(investment)}
-                                    data-testid={`button-view-investment-${investment.id}`}
-                                  >
-                                    <Eye size={16} />
-                                  </Button>
-                                  <Button 
-                                    variant="ghost"
-                                    size="sm"
-                                    title="Edit Investment"
-                                    onClick={() => handleEditInvestment(investment)}
-                                    data-testid={`button-edit-investment-${investment.id}`}
-                                  >
-                                    <Edit size={16} />
-                                  </Button>
-                                </div>
-                              </td>
+          ) : investmentsWithTransactions.length > 0 ? (
+            // Show investments with their associated transactions
+            investmentsWithTransactions.map((investment) => {
+              const typeIndex = investmentTypes?.findIndex(t => t.id === investment.type) ?? 0;
+              const typeLabel = investmentTypes?.find(t => t.id === investment.type)?.name || investment.type;
+              const hasTransactions = investment.transactions.length > 0;
+              
+              return (
+                <Card key={investment.id} data-testid={`card-investment-${investment.id}`}>
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div>
+                          <CardTitle className="text-lg font-medium text-foreground flex items-center">
+                            <Target className="mr-2" size={18} />
+                            {investment.name}
+                          </CardTitle>
+                          <div className="flex items-center space-x-4 mt-2">
+                            <Badge className={getTypeColor(typeIndex)}>
+                              {typeLabel}
+                            </Badge>
+                            <Badge variant={investment.isActive ? "default" : "secondary"}>
+                              {investment.isActive ? "Active" : "Inactive"}
+                            </Badge>
+                            <span className="text-sm text-muted-foreground">
+                              {investment.expectedReturn ? `${investment.expectedReturn}%` : 'N/A'} • {investment.paymentFrequency.replace('_', ' ')}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-bold text-foreground" data-testid={`text-principal-${investment.id}`}>
+                          {formatCurrency(investment.principalAmount)}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {hasTransactions ? `${investment.transactions.length} transaction${investment.transactions.length !== 1 ? 's' : ''}` : 'No transactions'}
+                        </p>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 p-4 bg-muted/20 rounded-lg">
+                      <div>
+                        <p className="text-xs text-muted-foreground font-medium">Start Date</p>
+                        <p className="text-sm font-medium">{new Date(investment.startDate).toLocaleDateString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground font-medium">Payment Amount</p>
+                        <p className="text-sm font-medium">{investment.paymentAmount ? formatCurrency(investment.paymentAmount) : 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground font-medium">Maturity Date</p>
+                        <p className="text-sm font-medium">{investment.maturityDate ? new Date(investment.maturityDate).toLocaleDateString() : 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground font-medium">Due Day</p>
+                        <p className="text-sm font-medium">{investment.dueDay ? `${investment.dueDay}th` : 'N/A'}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="font-medium text-foreground">Transaction History</h4>
+                      <div className="flex items-center space-x-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleAddTransaction(investment)}
+                          data-testid={`button-record-payment-${investment.id}`}
+                        >
+                          <CreditCard className="mr-2" size={16} />
+                          Record Payment
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEditInvestment(investment)}
+                          data-testid={`button-edit-${investment.id}`}
+                        >
+                          <Edit className="mr-2" size={16} />
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleDelete(investment.id, investment.name)}
+                          data-testid={`button-delete-${investment.id}`}
+                        >
+                          <Trash2 className="mr-2" size={16} />
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+
+                    {hasTransactions ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="bg-muted/50">
+                            <tr>
+                              <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Amount</th>
+                              <th className="text-center px-4 py-3 text-sm font-medium text-muted-foreground">Date</th>
+                              <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Notes</th>
+                              <th className="text-center px-4 py-3 text-sm font-medium text-muted-foreground">Actions</th>
                             </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            ))
-          ) : fallbackSortedGroups.length === 0 ? (
+                          </thead>
+                          <tbody className="divide-y divide-border">
+                            {investment.transactions
+                              .sort((a: any, b: any) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime())
+                              .map((transaction: any) => (
+                                <tr key={transaction.id} className="hover:bg-muted/30 transition-colors" data-testid={`row-transaction-${transaction.id}`}>
+                                  <td className="px-4 py-3">
+                                    <span className="font-medium text-green-600 dark:text-green-400">
+                                      +{formatCurrency(transaction.amount)}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-center text-sm text-muted-foreground">
+                                    {new Date(transaction.transactionDate).toLocaleDateString('en-GB')}
+                                  </td>
+                                  <td className="px-4 py-3 text-sm text-muted-foreground">
+                                    {transaction.notes || '-'}
+                                  </td>
+                                  <td className="px-4 py-3 text-center">
+                                    <Button 
+                                      variant="ghost"
+                                      size="sm"
+                                      title="View Transaction Details"
+                                      data-testid={`button-view-transaction-${transaction.id}`}
+                                    >
+                                      <Eye size={14} />
+                                    </Button>
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Clock className="mx-auto h-8 w-8 mb-2" />
+                        <p className="text-sm">No transactions recorded yet</p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleAddTransaction(investment)}
+                          className="mt-2"
+                          data-testid={`button-add-first-transaction-${investment.id}`}
+                        >
+                          <CreditCard className="mr-2" size={14} />
+                          Add First Transaction
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })
+          ) : (
             // No investments found
             <Card>
               <CardContent>
@@ -633,119 +668,6 @@ export default function Investments() {
                 </div>
               </CardContent>
             </Card>
-          ) : (
-            // Show investments grouped by start date when no transactions exist
-            fallbackSortedGroups.map((group) => (
-              <Card key={group.sortKey}>
-                <CardHeader className="pb-4">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg font-medium text-foreground flex items-center">
-                      <Calendar className="mr-2" size={18} />
-                      {group.displayName}
-                    </CardTitle>
-                    <Badge variant="outline" className="text-xs">
-                      {group.investments.length} investment{group.investments.length !== 1 ? 's' : ''}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-muted/50">
-                        <tr>
-                          <th className="text-left px-6 py-3 text-sm font-medium text-muted-foreground">Investment</th>
-                          <th className="text-left px-6 py-3 text-sm font-medium text-muted-foreground">Type</th>
-                          <th className="text-right px-6 py-3 text-sm font-medium text-muted-foreground">Principal Amount</th>
-                          <th className="text-center px-6 py-3 text-sm font-medium text-muted-foreground">Status</th>
-                          <th className="text-center px-6 py-3 text-sm font-medium text-muted-foreground">Start Date</th>
-                          <th className="text-right px-6 py-3 text-sm font-medium text-muted-foreground">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {group.investments.map((investment) => {
-                          return (
-                            <tr key={investment.id} className="hover:bg-muted/30 transition-colors" data-testid={`row-investment-${investment.id}`}>
-                              <td className="px-6 py-4">
-                                <div>
-                                  <p className="font-medium text-foreground">{investment.name}</p>
-                                  <p className="text-sm text-muted-foreground">
-                                    {investment.expectedReturn ? `${investment.expectedReturn}%` : 'N/A'} • {investment.paymentFrequency.replace('_', ' ')}
-                                  </p>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4">
-                                {(() => {
-                                  const typeIndex = investmentTypes?.findIndex(t => t.id === investment.type) ?? 0;
-                                  const typeLabel = investmentTypes?.find(t => t.id === investment.type)?.name || investment.type;
-                                  return (
-                                    <Badge className={getTypeColor(typeIndex)}>
-                                      {typeLabel}
-                                    </Badge>
-                                  );
-                                })()}
-                              </td>
-                              <td className="px-6 py-4 text-right text-foreground font-medium">
-                                {formatCurrency(investment.principalAmount)}
-                              </td>
-                              <td className="px-6 py-4 text-center">
-                                <Badge variant={investment.isActive ? "default" : "secondary"}>
-                                  {investment.isActive ? 'Active' : 'Inactive'}
-                                </Badge>
-                              </td>
-                              <td className="px-6 py-4 text-center text-sm text-muted-foreground">
-                                {new Date(investment.startDate).toLocaleDateString('en-GB')}
-                              </td>
-                              <td className="px-6 py-4 text-right">
-                                <div className="flex items-center justify-end space-x-2">
-                                  <Button 
-                                    variant="default"
-                                    size="sm"
-                                    onClick={() => handleAddTransaction(investment)}
-                                    disabled={addTransactionMutation.isPending}
-                                    data-testid={`button-record-payment-${investment.id}`}
-                                    className="bg-green-600 hover:bg-green-700 text-white"
-                                  >
-                                    <CreditCard size={16} className="mr-1" />
-                                    Record Payment
-                                  </Button>
-                                  <Button 
-                                    variant="ghost"
-                                    size="sm"
-                                    title="View Details"
-                                    data-testid={`button-view-${investment.id}`}
-                                  >
-                                    <Eye size={16} />
-                                  </Button>
-                                  <Button 
-                                    variant="ghost"
-                                    size="sm"
-                                    title="Edit"
-                                    onClick={() => handleEditInvestment(investment)}
-                                    data-testid={`button-edit-${investment.id}`}
-                                  >
-                                    <Edit size={16} />
-                                  </Button>
-                                  <Button 
-                                    variant="ghost"
-                                    size="sm"
-                                    title="Delete"
-                                    onClick={() => handleDelete(investment.id, investment.name)}
-                                    disabled={deleteMutation.isPending}
-                                    data-testid={`button-delete-${investment.id}`}
-                                  >
-                                    <Trash2 size={16} />
-                                  </Button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            ))
           )}
         </div>
       </main>

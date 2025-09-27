@@ -8,14 +8,14 @@ channel = "stable-25_05"
 [deployment]
 deploymentTarget = "autoscale"
 build = ["npm", "run", "build"]
-run = ["npm", "run", "start"]
+run = ["npm"]
 
 [[ports]]
 localPort = 5000
 externalPort = 80
 
 [[ports]]
-localPort = 45737
+localPort = 45291
 externalPort = 3000
 
 [env]
@@ -46,5 +46,5 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "echo \"y\" | npm run dev"
+args = "npm run dev"
 waitForPort = 5000
