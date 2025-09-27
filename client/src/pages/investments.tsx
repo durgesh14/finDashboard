@@ -29,6 +29,20 @@ import {
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { AddInvestmentModal } from "@/components/add-investment-modal";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+
+// Payment form schema
+const paymentFormSchema = z.object({
+  amount: z.coerce.number().positive("Payment amount must be positive"),
+  transactionDate: z.string().min(1, "Transaction date is required"),
+  notes: z.string().optional(),
+});
+
+type PaymentFormData = z.infer<typeof paymentFormSchema>;
 
 // Dynamic color generation for investment types
 const getTypeColor = (index: number) => {
@@ -107,15 +121,16 @@ export default function Investments() {
 
   const addTransactionMutation = useMutation({
     mutationFn: (data: { investmentId: string; amount: string; transactionDate: string; notes?: string }) => 
-      apiRequest("POST", "/api/transactions", data),
-    onSuccess: () => {
+      apiRequest("POST", "/api/transactions/record-payment", data),
+    onSuccess: (response: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/transactions/grouped"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/investments"] });
       setIsAddTransactionOpen(false);
       setSelectedInvestmentForTransaction(null);
       toast({
         title: "Success",
-        description: "Monthly payment recorded successfully",
+        description: response.message || "Payment recorded and principal amount updated successfully",
       });
     },
     onError: () => {
@@ -560,6 +575,17 @@ export default function Investments() {
                               <td className="px-6 py-4 text-right">
                                 <div className="flex items-center justify-end space-x-2">
                                   <Button 
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleAddTransaction(investment)}
+                                    disabled={addTransactionMutation.isPending}
+                                    data-testid={`button-record-payment-${investment.id}`}
+                                    className="text-green-600 border-green-600 hover:bg-green-50"
+                                  >
+                                    <CreditCard size={16} className="mr-1" />
+                                    Record Payment
+                                  </Button>
+                                  <Button 
                                     variant="ghost"
                                     size="sm"
                                     title="View Investment Details"
@@ -672,14 +698,15 @@ export default function Investments() {
                               <td className="px-6 py-4 text-right">
                                 <div className="flex items-center justify-end space-x-2">
                                   <Button 
-                                    variant="ghost"
+                                    variant="default"
                                     size="sm"
-                                    title="Add Monthly Payment"
-                                    onClick={() => handleQuickAddPayment(investment)}
+                                    onClick={() => handleAddTransaction(investment)}
                                     disabled={addTransactionMutation.isPending}
-                                    data-testid={`button-add-payment-${investment.id}`}
+                                    data-testid={`button-record-payment-${investment.id}`}
+                                    className="bg-green-600 hover:bg-green-700 text-white"
                                   >
-                                    <CreditCard size={16} />
+                                    <CreditCard size={16} className="mr-1" />
+                                    Record Payment
                                   </Button>
                                   <Button 
                                     variant="ghost"
@@ -728,6 +755,146 @@ export default function Investments() {
         onOpenChange={handleCloseModal}
         editingInvestment={editingInvestment}
       />
+
+      {/* Payment Recording Modal */}
+      {selectedInvestmentForTransaction && (
+        <PaymentRecordingModal 
+          open={isAddTransactionOpen}
+          onOpenChange={setIsAddTransactionOpen}
+          investment={selectedInvestmentForTransaction}
+          onSubmit={addTransactionMutation}
+        />
+      )}
     </div>
+  );
+}
+
+// Payment Recording Modal Component
+function PaymentRecordingModal({ 
+  open, 
+  onOpenChange, 
+  investment, 
+  onSubmit 
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  investment: Investment;
+  onSubmit: any;
+}) {
+  const form = useForm<PaymentFormData>({
+    resolver: zodResolver(paymentFormSchema),
+    defaultValues: {
+      amount: investment.paymentAmount ? parseFloat(investment.paymentAmount) : 0,
+      transactionDate: new Date().toISOString().split('T')[0],
+      notes: `Monthly payment for ${investment.name}`,
+    },
+  });
+
+  const handleSubmit = (data: PaymentFormData) => {
+    onSubmit.mutate({
+      investmentId: investment.id,
+      amount: data.amount.toString(),
+      transactionDate: data.transactionDate,
+      notes: data.notes,
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Record Payment for {investment.name}</DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+            <div className="bg-muted/30 p-4 rounded-lg">
+              <div className="text-sm text-muted-foreground mb-2">Investment Details:</div>
+              <div className="text-sm">
+                <div>Current Principal: ₹{parseFloat(investment.principalAmount).toLocaleString()}</div>
+                <div>Payment Frequency: {investment.paymentFrequency.replace('_', ' ')}</div>
+                {investment.paymentAmount && (
+                  <div>Suggested Amount: ₹{parseFloat(investment.paymentAmount).toLocaleString()}</div>
+                )}
+              </div>
+            </div>
+
+            <FormField
+              control={form.control}
+              name="amount"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Payment Amount *</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="number"
+                      step="0.01"
+                      placeholder="Enter payment amount"
+                      {...field}
+                      data-testid="input-payment-amount"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="transactionDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Payment Date *</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="date"
+                      {...field}
+                      data-testid="input-payment-date"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Notes (Optional)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="Add any notes about this payment"
+                      {...field}
+                      data-testid="input-payment-notes"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="flex justify-end space-x-2 pt-4">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => onOpenChange(false)}
+                data-testid="button-cancel-payment"
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={onSubmit.isPending}
+                data-testid="button-confirm-payment"
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {onSubmit.isPending ? "Recording..." : "Record Payment"}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
   );
 }

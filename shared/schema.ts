@@ -84,6 +84,8 @@ export const insertInvestmentSchema = createInsertSchema(investments).omit({
 export const insertTransactionSchema = createInsertSchema(transactions).omit({
   id: true,
   createdAt: true,
+}).extend({
+  amount: z.coerce.number().positive("Transaction amount must be positive"),
 });
 
 export const insertBillSchema = createInsertSchema(bills).omit({

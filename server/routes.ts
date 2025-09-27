@@ -118,10 +118,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Record payment (create transaction and update principal amount)
+  app.post("/api/transactions/record-payment", requireAuth, async (req: any, res) => {
+    try {
+      console.log('Record payment request body:', req.body);
+      console.log('User ID:', req.user.id);
+      
+      const validatedData = insertTransactionSchema.parse(req.body);
+      console.log('Validated data:', validatedData);
+      
+      // Additional server-side validation for positive amounts
+      if (validatedData.amount <= 0) {
+        return res.status(400).json({ error: "Payment amount must be positive" });
+      }
+      
+      // Verify the investment belongs to the authenticated user
+      const investment = await appStorage.getInvestment(validatedData.investmentId);
+      console.log('Found investment:', investment?.id, 'User:', investment?.userId);
+      if (!investment) {
+        return res.status(404).json({ error: "Investment not found" });
+      }
+      
+      if (investment.userId !== req.user.id) {
+        console.log('Access denied: Investment userId', investment.userId, 'vs User ID', req.user.id);
+        return res.status(403).json({ error: "Access denied: You can only record payments for your own investments" });
+      }
+      
+      console.log('Creating transaction...');
+      const result = await appStorage.createTransactionAndUpdatePrincipal(validatedData);
+      console.log('Transaction result:', result.transaction?.id, 'Investment updated:', result.updatedInvestment?.principalAmount);
+      
+      res.status(201).json({
+        transaction: result.transaction,
+        updatedInvestment: result.updatedInvestment,
+        message: "Payment recorded and principal amount updated successfully"
+      });
+    } catch (error) {
+      console.error('Error in record-payment:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to record payment" });
+    }
+  });
+
   // Get transactions grouped by month/year for investments view
   app.get("/api/transactions/grouped", requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
+      console.log('Getting grouped transactions for user:', userId);
       const investments = await appStorage.getInvestments(userId);
       const allTransactions = await appStorage.getAllTransactionsForUser(userId);
       

@@ -234,12 +234,47 @@ export class MongoStorage implements IStorage {
   ): Promise<Transaction> {
     const transaction: Transaction = {
       ...insertTransaction,
+      amount: insertTransaction.amount.toString(), // Convert number to string for database
       id: this.generateId(),
       notes: insertTransaction.notes ?? null,
       createdAt: new Date(),
     };
     await this.transactions.insertOne(transaction);
     return transaction;
+  }
+
+  async createTransactionAndUpdatePrincipal(insertTransaction: InsertTransaction): Promise<{ transaction: Transaction; updatedInvestment: Investment | undefined }> {
+    console.log('MongoDB: createTransactionAndUpdatePrincipal called with:', insertTransaction);
+    
+    // Create the transaction
+    console.log('MongoDB: Creating transaction...');
+    const transaction = await this.createTransaction(insertTransaction);
+    console.log('MongoDB: Transaction created with ID:', transaction.id);
+    
+    // Update the investment's principal amount
+    console.log('MongoDB: Getting investment for principal update...');
+    const investment = await this.getInvestment(insertTransaction.investmentId);
+    console.log('MongoDB: Found investment:', investment?.id, 'Current principal:', investment?.principalAmount);
+    let updatedInvestment: Investment | undefined = undefined;
+    
+    if (investment) {
+      const currentPrincipal = parseFloat(investment.principalAmount);
+      const paymentAmount = typeof insertTransaction.amount === 'number' 
+        ? insertTransaction.amount 
+        : parseFloat(insertTransaction.amount);
+      const newPrincipal = currentPrincipal + paymentAmount;
+      console.log('MongoDB: Updating principal from', currentPrincipal, 'to', newPrincipal);
+      
+      updatedInvestment = await this.updateInvestment(insertTransaction.investmentId, {
+        principalAmount: newPrincipal.toString()
+      });
+      console.log('MongoDB: Investment updated successfully');
+    } else {
+      console.log('MongoDB: Investment not found!');
+    }
+    
+    console.log('MongoDB: Returning result with transaction:', transaction.id, 'and updated investment:', updatedInvestment?.id);
+    return { transaction, updatedInvestment };
   }
 
   async deleteTransaction(id: string): Promise<boolean> {

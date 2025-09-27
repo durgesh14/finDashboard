@@ -23,6 +23,7 @@ export interface IStorage {
   getTransactions(investmentId: string): Promise<Transaction[]>;
   getAllTransactionsForUser(userId: string): Promise<Transaction[]>;
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
+  createTransactionAndUpdatePrincipal(transaction: InsertTransaction): Promise<{ transaction: Transaction; updatedInvestment: Investment | undefined }>;
   deleteTransaction(id: string): Promise<boolean>;
 
   // Bill methods
@@ -200,12 +201,36 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const transaction: Transaction = {
       ...insertTransaction,
+      amount: insertTransaction.amount.toString(), // Convert number to string for database
       notes: insertTransaction.notes ?? null,
       id,
       createdAt: new Date()
     };
     this.transactions.set(id, transaction);
     return transaction;
+  }
+
+  async createTransactionAndUpdatePrincipal(insertTransaction: InsertTransaction): Promise<{ transaction: Transaction; updatedInvestment: Investment | undefined }> {
+    // Create the transaction
+    const transaction = await this.createTransaction(insertTransaction);
+    
+    // Update the investment's principal amount
+    const investment = this.investments.get(insertTransaction.investmentId);
+    let updatedInvestment: Investment | undefined = undefined;
+    
+    if (investment) {
+      const currentPrincipal = parseFloat(investment.principalAmount);
+      const paymentAmount = typeof insertTransaction.amount === 'number' 
+        ? insertTransaction.amount 
+        : parseFloat(insertTransaction.amount);
+      const newPrincipal = currentPrincipal + paymentAmount;
+      
+      updatedInvestment = await this.updateInvestment(insertTransaction.investmentId, {
+        principalAmount: newPrincipal.toString()
+      });
+    }
+    
+    return { transaction, updatedInvestment };
   }
 
   async deleteTransaction(id: string): Promise<boolean> {
