@@ -116,27 +116,6 @@ export function InvestmentTable({ onEditInvestment }: InvestmentTableProps) {
     }).format(parseFloat(amount));
   };
 
-  const calculateCurrentValue = (investment: Investment) => {
-    const principal = parseFloat(investment.principalAmount);
-    const annualReturnRate = investment.expectedReturn ? parseFloat(investment.expectedReturn) / 100 : 0.08;
-    
-    // Calculate months elapsed since start date
-    const startDate = new Date(investment.startDate);
-    const currentDate = new Date();
-    const monthsElapsed = Math.max(0, (currentDate.getFullYear() - startDate.getFullYear()) * 12 + (currentDate.getMonth() - startDate.getMonth()));
-    
-    // Simple annual compounding: principal * (1 + rate)^years
-    const yearsElapsed = monthsElapsed / 12;
-    return principal * Math.pow(1 + annualReturnRate, yearsElapsed);
-  };
-
-  const calculateReturns = (investment: Investment) => {
-    if (!investment.expectedReturn) return 0;
-    
-    // For simplicity, just return the expected return rate as set by user
-    // This is what users expect to see - the rate they entered
-    return parseFloat(investment.expectedReturn);
-  };
 
   const getNextPaymentDate = (investment: Investment) => {
     if (investment.paymentFrequency === 'one_time' || !investment.dueDay || !investment.startDate) {
@@ -323,8 +302,6 @@ export function InvestmentTable({ onEditInvestment }: InvestmentTableProps) {
                   <th className="text-left px-6 py-3 text-sm font-medium text-muted-foreground">Investment</th>
                   <th className="text-left px-6 py-3 text-sm font-medium text-muted-foreground">Type</th>
                   <th className="text-right px-6 py-3 text-sm font-medium text-muted-foreground">Invested</th>
-                  <th className="text-right px-6 py-3 text-sm font-medium text-muted-foreground">Current Value</th>
-                  <th className="text-right px-6 py-3 text-sm font-medium text-muted-foreground">Returns</th>
                   <th className="text-center px-6 py-3 text-sm font-medium text-muted-foreground">Status</th>
                   <th className="text-center px-6 py-3 text-sm font-medium text-muted-foreground">Next Payment</th>
                   <th className="text-right px-6 py-3 text-sm font-medium text-muted-foreground">Actions</th>
@@ -335,8 +312,6 @@ export function InvestmentTable({ onEditInvestment }: InvestmentTableProps) {
                   const typeInfo = investmentTypes?.find(t => t.id === investment.type);
                   const typeName = typeInfo?.name || 'Unknown';
                   const IconComponent = getTypeIcon(typeName);
-                  const currentValue = calculateCurrentValue(investment);
-                  const returns = calculateReturns(investment);
                   const typeIndex = investmentTypes?.findIndex(t => t.id === investment.type) ?? 0;
                   
                   return (
@@ -361,16 +336,6 @@ export function InvestmentTable({ onEditInvestment }: InvestmentTableProps) {
                       </td>
                       <td className="px-6 py-4 text-right text-foreground font-medium">
                         {formatCurrency(investment.principalAmount)}
-                      </td>
-                      <td className="px-6 py-4 text-right text-foreground font-medium">
-                        {formatCurrency(currentValue.toString())}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end space-x-1">
-                          <span className={`font-medium ${returns >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                            {returns >= 0 ? '+' : ''}{returns.toFixed(1)}%
-                          </span>
-                        </div>
                       </td>
                       <td className="px-6 py-4 text-center">
                         {getStatusBadge(investment)}

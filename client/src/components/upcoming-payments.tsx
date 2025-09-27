@@ -1,15 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Investment } from "@shared/schema";
-import { TrendingUp, TrendingDown, Calendar, Plus } from "lucide-react";
-
-interface PortfolioInsight {
-  investment: Investment;
-  currentValue: number;
-  gains: number;
-  gainsPercentage: number;
-  monthsInvested: number;
-}
+import { Calendar, Plus, Wallet } from "lucide-react";
 
 export function PortfolioPerformance() {
   const { data: investments, isLoading } = useQuery<Investment[]>({
@@ -41,129 +33,49 @@ export function PortfolioPerformance() {
     }).format(amount);
   };
 
-  // Calculate portfolio insights
-  const portfolioInsights: PortfolioInsight[] = investments
+  // Get recent investments
+  const recentInvestments = investments
     ?.filter(inv => inv.isActive)
-    .map(investment => {
-      const principal = parseFloat(investment.principalAmount);
-      const returnRate = investment.expectedReturn ? parseFloat(investment.expectedReturn) / 100 : 0.08;
-      const startDate = new Date(investment.startDate);
-      const currentDate = new Date();
-      const months = Math.max(0, Math.floor((currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30)));
-      
-      // Skip future-dated investments
-      if (startDate > currentDate) {
-        return {
-          investment,
-          currentValue: principal,
-          gains: 0,
-          gainsPercentage: 0,
-          monthsInvested: 0
-        };
-      }
-      
-      const currentValue = principal * Math.pow(1 + returnRate/12, months);
-      const gains = currentValue - principal;
-      const gainsPercentage = principal > 0 ? (gains / principal * 100) : 0;
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 5) || [];
 
-      return {
-        investment,
-        currentValue,
-        gains,
-        gainsPercentage,
-        monthsInvested: months
-      };
-    })
-    .sort((a, b) => b.gainsPercentage - a.gainsPercentage) || [];
-
-  const topPerformers = portfolioInsights.slice(0, 3);
-  const recentInvestments = portfolioInsights
-    .sort((a, b) => new Date(b.investment.createdAt).getTime() - new Date(a.investment.createdAt).getTime())
-    .slice(0, 2);
-
-  const hasInvestments = portfolioInsights.length > 0;
+  const hasInvestments = recentInvestments.length > 0;
 
   return (
     <Card className="shadow-sm">
       <CardContent className="p-6">
-        <h3 className="text-lg font-semibold text-foreground mb-4">Portfolio Performance</h3>
+        <h3 className="text-lg font-semibold text-foreground mb-4">Recent Investments</h3>
         
         {!hasInvestments ? (
           <div className="text-center py-8 text-muted-foreground">
             <Plus className="mx-auto mb-2 h-8 w-8 text-muted-foreground/50" />
             <p className="text-sm">Start tracking your investments</p>
-            <p className="text-xs">Add your first investment to see insights</p>
+            <p className="text-xs">Add your first investment to see recent activity</p>
           </div>
         ) : (
-          <div className="space-y-6">
-            {/* Top Performers */}
-            <div>
-              <h4 className="text-sm font-medium text-muted-foreground mb-3">Top Performers</h4>
-              <div className="space-y-3">
-                {topPerformers.map((insight, index) => (
-                  <div 
-                    key={insight.investment.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-muted/30"
-                    data-testid={`performer-${insight.investment.id}`}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div className="flex items-center space-x-1">
-                        {insight.gainsPercentage >= 0 ? (
-                          <TrendingUp className="h-3 w-3 text-green-500" />
-                        ) : (
-                          <TrendingDown className="h-3 w-3 text-red-500" />
-                        )}
-                        <span className={`text-xs font-medium ${
-                          insight.gainsPercentage >= 0 ? 'text-green-500' : 'text-red-500'
-                        }`}>
-                          {insight.gainsPercentage >= 0 ? '+' : ''}{insight.gainsPercentage.toFixed(1)}%
-                        </span>
-                      </div>
-                      <div>
-                        <p className="font-medium text-foreground text-sm">
-                          {insight.investment.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground capitalize">
-                          {insight.investment.type.replace('_', ' ')}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-sm font-semibold text-foreground">
-                      {formatCurrency(insight.currentValue)}
-                    </span>
+          <div className="space-y-3">
+            {recentInvestments.map((investment) => (
+              <div 
+                key={investment.id}
+                className="flex items-center justify-between p-3 rounded-lg bg-muted/30"
+                data-testid={`recent-${investment.id}`}
+              >
+                <div className="flex items-center space-x-3">
+                  <Wallet className="h-4 w-4 text-blue-500" />
+                  <div>
+                    <p className="font-medium text-foreground text-sm">
+                      {investment.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Added {new Date(investment.createdAt).toLocaleDateString()} • {investment.paymentFrequency.replace('_', ' ')}
+                    </p>
                   </div>
-                ))}
+                </div>
+                <span className="text-sm font-semibold text-foreground">
+                  {formatCurrency(parseFloat(investment.principalAmount))}
+                </span>
               </div>
-            </div>
-
-            {/* Recent Activity */}
-            <div>
-              <h4 className="text-sm font-medium text-muted-foreground mb-3">Recent Activity</h4>
-              <div className="space-y-3">
-                {recentInvestments.map((insight) => (
-                  <div 
-                    key={insight.investment.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800"
-                    data-testid={`recent-${insight.investment.id}`}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <Calendar className="h-3 w-3 text-blue-500" />
-                      <div>
-                        <p className="font-medium text-foreground text-sm">
-                          {insight.investment.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Added {new Date(insight.investment.createdAt).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-sm font-semibold text-foreground">
-                      {formatCurrency(parseFloat(insight.investment.principalAmount))}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            ))}
           </div>
         )}
       </CardContent>
