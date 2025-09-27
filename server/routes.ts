@@ -1,17 +1,23 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { initializeStorage, setStorage, IStorage } from "./storage";
 import { insertInvestmentSchema, insertTransactionSchema, insertBillSchema, insertBillPaymentSchema, insertInvestmentTypeSchema, insertBillCategorySchema } from "@shared/schema";
 import { z } from "zod";
 
+// Global storage instance that will be used by all routes
+let appStorage: IStorage;
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Initialize storage (MongoDB or fallback to memory)
+  appStorage = await initializeStorage();
+  setStorage(appStorage);
   
   // Get all investments
   app.get("/api/investments", async (req, res) => {
     try {
       // For demo purposes, using a default user ID
       const userId = "demo-user";
-      const investments = await storage.getInvestments(userId);
+      const investments = await appStorage.getInvestments(userId);
       res.json(investments);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch investments" });
@@ -21,7 +27,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get single investment
   app.get("/api/investments/:id", async (req, res) => {
     try {
-      const investment = await storage.getInvestment(req.params.id);
+      const investment = await appStorage.getInvestment(req.params.id);
       if (!investment) {
         return res.status(404).json({ error: "Investment not found" });
       }
@@ -36,7 +42,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertInvestmentSchema.parse(req.body);
       const userId = "demo-user"; // For demo purposes
-      const investment = await storage.createInvestment(userId, validatedData);
+      const investment = await appStorage.createInvestment(userId, validatedData);
       res.status(201).json(investment);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -50,7 +56,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/investments/:id", async (req, res) => {
     try {
       const validatedData = insertInvestmentSchema.partial().parse(req.body);
-      const investment = await storage.updateInvestment(req.params.id, validatedData);
+      const investment = await appStorage.updateInvestment(req.params.id, validatedData);
       if (!investment) {
         return res.status(404).json({ error: "Investment not found" });
       }
@@ -66,7 +72,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delete investment
   app.delete("/api/investments/:id", async (req, res) => {
     try {
-      const deleted = await storage.deleteInvestment(req.params.id);
+      const deleted = await appStorage.deleteInvestment(req.params.id);
       if (!deleted) {
         return res.status(404).json({ error: "Investment not found" });
       }
@@ -79,7 +85,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get transactions for an investment
   app.get("/api/investments/:id/transactions", async (req, res) => {
     try {
-      const transactions = await storage.getTransactions(req.params.id);
+      const transactions = await appStorage.getTransactions(req.params.id);
       res.json(transactions);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch transactions" });
@@ -90,7 +96,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/transactions", async (req, res) => {
     try {
       const validatedData = insertTransactionSchema.parse(req.body);
-      const transaction = await storage.createTransaction(validatedData);
+      const transaction = await appStorage.createTransaction(validatedData);
       res.status(201).json(transaction);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -104,7 +110,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/dashboard/summary", async (req, res) => {
     try {
       const userId = "demo-user";
-      const investments = await storage.getInvestments(userId);
+      const investments = await appStorage.getInvestments(userId);
       
       // Calculate total invested (sum of all principal amounts)
       const totalInvested = investments.reduce((sum, inv) => {
@@ -116,7 +122,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
       
       // Get all transactions for the user
-      const allTransactions = await storage.getAllTransactionsForUser(userId);
+      const allTransactions = await appStorage.getAllTransactionsForUser(userId);
       
       let finalCurrentTotal: number;
       let finalLastMonthTotal: number;
@@ -277,7 +283,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/bills", async (req, res) => {
     try {
       const userId = "demo-user";
-      const bills = await storage.getBills(userId);
+      const bills = await appStorage.getBills(userId);
       res.json(bills);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch bills" });
@@ -289,7 +295,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = "demo-user";
       const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
-      const bills = await storage.getBills(userId);
+      const bills = await appStorage.getBills(userId);
       
       const totalMonthlyBills = bills
         .filter(bill => bill.isActive && bill.frequency === 'monthly')
@@ -387,7 +393,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Calculate actual payments for this month (only count paid status)
           for (const bill of bills) {
-            const payments = await storage.getBillPayments(bill.id);
+            const payments = await appStorage.getBillPayments(bill.id);
             const monthPayments = payments.filter(payment => {
               const paymentDate = new Date(payment.paidDate);
               return payment.status === 'paid' && 
@@ -443,7 +449,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get single bill
   app.get("/api/bills/:id", async (req, res) => {
     try {
-      const bill = await storage.getBill(req.params.id);
+      const bill = await appStorage.getBill(req.params.id);
       if (!bill) {
         return res.status(404).json({ error: "Bill not found" });
       }
@@ -457,7 +463,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/bills/:id/payments", async (req, res) => {
     try {
       const { id } = req.params;
-      const payments = await storage.getBillPayments(id);
+      const payments = await appStorage.getBillPayments(id);
       res.json(payments);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch bill payments" });
@@ -472,7 +478,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...req.body,
         billId: id, // Override any billId from body with URL param
       });
-      const payment = await storage.createBillPayment(paymentData);
+      const payment = await appStorage.createBillPayment(paymentData);
       res.status(201).json(payment);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -488,11 +494,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = "demo-user";
       const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
       
-      const bills = await storage.getBills(userId);
+      const bills = await appStorage.getBills(userId);
       const allPayments: any[] = [];
       
       for (const bill of bills) {
-        const payments = await storage.getBillPayments(bill.id);
+        const payments = await appStorage.getBillPayments(bill.id);
         const yearPayments = payments.filter(payment => {
           const paymentYear = new Date(payment.paidDate).getFullYear();
           return paymentYear === year;
@@ -518,7 +524,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertBillSchema.parse(req.body);
       const userId = "demo-user";
-      const bill = await storage.createBill(userId, validatedData);
+      const bill = await appStorage.createBill(userId, validatedData);
       res.status(201).json(bill);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -532,7 +538,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/bills/:id", async (req, res) => {
     try {
       const validatedData = insertBillSchema.partial().parse(req.body);
-      const bill = await storage.updateBill(req.params.id, validatedData);
+      const bill = await appStorage.updateBill(req.params.id, validatedData);
       if (!bill) {
         return res.status(404).json({ error: "Bill not found" });
       }
@@ -548,7 +554,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delete bill
   app.delete("/api/bills/:id", async (req, res) => {
     try {
-      const deleted = await storage.deleteBill(req.params.id);
+      const deleted = await appStorage.deleteBill(req.params.id);
       if (!deleted) {
         return res.status(404).json({ error: "Bill not found" });
       }
@@ -564,7 +570,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/investment-types", async (req, res) => {
     try {
       const userId = "demo-user";
-      const types = await storage.getInvestmentTypes(userId);
+      const types = await appStorage.getInvestmentTypes(userId);
       res.json(types);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch investment types" });
@@ -576,7 +582,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertInvestmentTypeSchema.parse(req.body);
       const userId = "demo-user";
-      const type = await storage.createInvestmentType(userId, validatedData);
+      const type = await appStorage.createInvestmentType(userId, validatedData);
       res.status(201).json(type);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -590,7 +596,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/investment-types/:id", async (req, res) => {
     try {
       const validatedData = insertInvestmentTypeSchema.partial().parse(req.body);
-      const type = await storage.updateInvestmentType(req.params.id, validatedData);
+      const type = await appStorage.updateInvestmentType(req.params.id, validatedData);
       if (!type) {
         return res.status(404).json({ error: "Investment type not found" });
       }
@@ -606,7 +612,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delete investment type
   app.delete("/api/investment-types/:id", async (req, res) => {
     try {
-      const deleted = await storage.deleteInvestmentType(req.params.id);
+      const deleted = await appStorage.deleteInvestmentType(req.params.id);
       if (!deleted) {
         return res.status(404).json({ error: "Investment type not found" });
       }
@@ -622,7 +628,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/bill-categories", async (req, res) => {
     try {
       const userId = "demo-user";
-      const categories = await storage.getBillCategories(userId);
+      const categories = await appStorage.getBillCategories(userId);
       res.json(categories);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch bill categories" });
@@ -634,7 +640,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertBillCategorySchema.parse(req.body);
       const userId = "demo-user";
-      const category = await storage.createBillCategory(userId, validatedData);
+      const category = await appStorage.createBillCategory(userId, validatedData);
       res.status(201).json(category);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -648,7 +654,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/bill-categories/:id", async (req, res) => {
     try {
       const validatedData = insertBillCategorySchema.partial().parse(req.body);
-      const category = await storage.updateBillCategory(req.params.id, validatedData);
+      const category = await appStorage.updateBillCategory(req.params.id, validatedData);
       if (!category) {
         return res.status(404).json({ error: "Bill category not found" });
       }
@@ -664,7 +670,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delete bill category
   app.delete("/api/bill-categories/:id", async (req, res) => {
     try {
-      const deleted = await storage.deleteBillCategory(req.params.id);
+      const deleted = await appStorage.deleteBillCategory(req.params.id);
       if (!deleted) {
         return res.status(404).json({ error: "Bill category not found" });
       }
@@ -680,7 +686,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/data/export", async (req, res) => {
     try {
       const userId = "demo-user";
-      const exportData = await storage.exportAllData(userId);
+      const exportData = await appStorage.exportAllData(userId);
       
       // Set headers for file download
       res.setHeader('Content-Type', 'application/json');
@@ -696,7 +702,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/data/import", async (req, res) => {
     try {
       const userId = "demo-user";
-      const success = await storage.importAllData(userId, req.body);
+      const success = await appStorage.importAllData(userId, req.body);
       
       if (!success) {
         return res.status(400).json({ error: "Failed to import data" });
@@ -714,7 +720,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const validatedData = insertBillPaymentSchema.partial().parse(req.body);
-      const payment = await storage.updateBillPayment(id, validatedData);
+      const payment = await appStorage.updateBillPayment(id, validatedData);
       if (!payment) {
         return res.status(404).json({ error: "Payment not found" });
       }
@@ -731,7 +737,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/bill-payments/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const deleted = await storage.deleteBillPayment(id);
+      const deleted = await appStorage.deleteBillPayment(id);
       if (!deleted) {
         return res.status(404).json({ error: "Payment not found" });
       }
@@ -745,7 +751,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/bill-payments", async (req, res) => {
     try {
       const validatedData = insertBillPaymentSchema.parse(req.body);
-      const payment = await storage.createBillPayment(validatedData);
+      const payment = await appStorage.createBillPayment(validatedData);
       res.status(201).json(payment);
     } catch (error) {
       if (error instanceof z.ZodError) {

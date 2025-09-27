@@ -541,4 +541,25 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+import { MongoStorage } from "./mongodb-storage";
+
+// Initialize MongoDB connection and return appropriate storage
+export const initializeStorage = async (): Promise<IStorage> => {
+  try {
+    const mongoStorage = new MongoStorage();
+    await mongoStorage.connect();
+    console.log('Successfully connected to MongoDB Atlas');
+    return mongoStorage;
+  } catch (error) {
+    console.error('Failed to connect to MongoDB, falling back to memory storage:', error);
+    return new MemStorage();
+  }
+};
+
+// Default storage instance (will be replaced with initialized storage)
+export let storage: IStorage = new MemStorage();
+
+// Function to replace the storage instance
+export const setStorage = (newStorage: IStorage) => {
+  storage = newStorage;
+};
