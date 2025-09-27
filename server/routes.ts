@@ -276,11 +276,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const nextPaymentDate = nextPayment?.nextDueDate;
 
+      // Calculate actual payment amount for recurring investments
+      const calculatePaymentAmount = (investment: any) => {
+        // Use paymentAmount if available and investment is recurring
+        if (investment.paymentAmount && investment.paymentFrequency !== 'one_time') {
+          return parseFloat(investment.paymentAmount);
+        }
+        
+        // For one-time investments, return the full amount
+        if (investment.paymentFrequency === 'one_time') {
+          return parseFloat(investment.principalAmount);
+        }
+        
+        // Fallback: if no paymentAmount is set, return the principal amount
+        // (This handles legacy data before the paymentAmount field was added)
+        return parseFloat(investment.principalAmount);
+      };
+
       res.json({
         totalInvested: Math.round(totalInvested),
         changeVsLastMonth: changeVsLastMonth !== null ? Math.round(changeVsLastMonth * 100) / 100 : null,
         upcomingPayments: upcomingPayments.length,
-        nextPaymentAmount: nextPayment ? parseFloat(nextPayment.principalAmount) : null,
+        nextPaymentAmount: nextPayment ? calculatePaymentAmount(nextPayment) : null,
         nextPaymentDate: nextPaymentDate ? nextPaymentDate.getDate() : null,
         nextPaymentName: nextPayment ? nextPayment.name : null
       });
@@ -695,9 +712,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Data Export/Import routes
   
   // Export all data
-  app.get("/api/data/export", async (req, res) => {
+  app.get("/api/data/export", requireAuth, async (req: any, res) => {
     try {
-      const userId = "demo-user";
+      const userId = req.user.id;
       const exportData = await appStorage.exportAllData(userId);
       
       // Set headers for file download
@@ -711,9 +728,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Import all data
-  app.post("/api/data/import", async (req, res) => {
+  app.post("/api/data/import", requireAuth, async (req: any, res) => {
     try {
-      const userId = "demo-user";
+      const userId = req.user.id;
       const success = await appStorage.importAllData(userId, req.body);
       
       if (!success) {

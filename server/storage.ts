@@ -152,6 +152,7 @@ export class MemStorage implements IStorage {
       maturityDate: insertInvestment.maturityDate ?? null,
       expectedReturn: insertInvestment.expectedReturn ?? null,
       notes: insertInvestment.notes ?? null,
+      paymentAmount: insertInvestment.paymentAmount ? insertInvestment.paymentAmount.toString() : null,
       id, 
       userId,
       isActive: true,
@@ -169,6 +170,7 @@ export class MemStorage implements IStorage {
     const updatedInvestment: Investment = {
       ...investment,
       ...updateData,
+      paymentAmount: updateData.paymentAmount ? updateData.paymentAmount.toString() : investment.paymentAmount,
       updatedAt: new Date()
     };
     this.investments.set(id, updatedInvestment);

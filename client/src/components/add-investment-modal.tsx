@@ -34,6 +34,7 @@ export function AddInvestmentModal({ open, onOpenChange, editingInvestment }: Ad
       name: "",
       type: "",
       principalAmount: "0",
+      paymentAmount: undefined,
       startDate: "",
       paymentFrequency: "monthly",
       dueDay: null,
@@ -50,6 +51,7 @@ export function AddInvestmentModal({ open, onOpenChange, editingInvestment }: Ad
         name: editingInvestment.name,
         type: editingInvestment.type,
         principalAmount: editingInvestment.principalAmount,
+        paymentAmount: editingInvestment.paymentAmount ? parseFloat(editingInvestment.paymentAmount) : undefined,
         startDate: editingInvestment.startDate,
         paymentFrequency: editingInvestment.paymentFrequency as "monthly" | "quarterly" | "half_yearly" | "yearly" | "one_time",
         dueDay: editingInvestment.dueDay,
@@ -62,6 +64,7 @@ export function AddInvestmentModal({ open, onOpenChange, editingInvestment }: Ad
         name: "",
         type: "",
         principalAmount: "0",
+        paymentAmount: undefined,
         startDate: "",
         paymentFrequency: "monthly",
         dueDay: null,
@@ -156,11 +159,13 @@ export function AddInvestmentModal({ open, onOpenChange, editingInvestment }: Ad
             </div>
             
             <div>
-              <Label htmlFor="principalAmount">Principal Amount</Label>
+              <Label htmlFor="principalAmount">
+                {paymentFrequency === "one_time" ? "Total Amount" : "Total Amount / Current Value"}
+              </Label>
               <Input
                 id="principalAmount"
                 type="number"
-                placeholder="10000"
+                placeholder="38500"
                 {...form.register("principalAmount")}
                 data-testid="input-principal-amount"
               />
@@ -168,6 +173,30 @@ export function AddInvestmentModal({ open, onOpenChange, editingInvestment }: Ad
                 <p className="text-sm text-destructive mt-1">{form.formState.errors.principalAmount.message}</p>
               )}
             </div>
+            
+            {paymentFrequency !== "one_time" && (
+              <div>
+                <Label htmlFor="paymentAmount">
+                  {paymentFrequency === "monthly" ? "Monthly Payment" : 
+                   paymentFrequency === "quarterly" ? "Quarterly Payment" :
+                   paymentFrequency === "half_yearly" ? "Half-yearly Payment" : 
+                   "Yearly Payment"}
+                </Label>
+                <Input
+                  id="paymentAmount"
+                  type="number"
+                  placeholder={paymentFrequency === "monthly" ? "3500" : 
+                              paymentFrequency === "quarterly" ? "10500" :
+                              paymentFrequency === "half_yearly" ? "21000" : 
+                              "42000"}
+                  {...form.register("paymentAmount")}
+                  data-testid="input-payment-amount"
+                />
+                {form.formState.errors.paymentAmount && (
+                  <p className="text-sm text-destructive mt-1">{form.formState.errors.paymentAmount.message}</p>
+                )}
+              </div>
+            )}
             
             <div>
               <Label htmlFor="startDate">Start Date</Label>

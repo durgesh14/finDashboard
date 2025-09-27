@@ -34,11 +34,21 @@ export function setupAuth(app: Express) {
   // Require SESSION_SECRET in production
   const sessionSecret = process.env.SESSION_SECRET;
   if (!sessionSecret) {
-    throw new Error('SESSION_SECRET environment variable is required for authentication');
+    throw new Error(
+      "SESSION_SECRET environment variable is required for authentication"
+    );
   }
-  
-  const isProduction = process.env.NODE_ENV === 'production';
-  
+
+  const isProduction = process.env.NODE_ENV === "production";
+  // Detect if running on localhost (for dev, even if NODE_ENV=production)
+  const host = process.env.HOST || "";
+  const isLocalhost =
+    host.includes("localhost") ||
+    host.includes("127.0.0.1") ||
+    host.includes("0.0.0.0") ||
+    host === "";
+  console.log("isProduction:", isProduction, "isLocalhost:", isLocalhost);
+
   const sessionSettings: session.SessionOptions = {
     secret: sessionSecret,
     resave: false,
@@ -46,9 +56,9 @@ export function setupAuth(app: Express) {
     store: storage.sessionStore,
     cookie: {
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
-      secure: isProduction, // Use secure cookies in production
+      secure: isProduction && !isLocalhost, // Only secure on real production
       httpOnly: true, // Prevent XSS attacks
-      sameSite: isProduction ? 'strict' : 'lax', // CSRF protection
+      sameSite: isProduction && !isLocalhost ? "strict" : "lax", // CSRF protection
     },
   };
 
@@ -68,7 +78,7 @@ export function setupAuth(app: Express) {
       } catch (error) {
         return done(error);
       }
-    }),
+    })
   );
 
   passport.serializeUser((user, done) => done(null, user.id));
@@ -85,8 +95,10 @@ export function setupAuth(app: Express) {
     try {
       // Validate request body with Zod schema
       const validatedData = insertUserSchema.parse(req.body);
-      
-      const existingUser = await storage.getUserByUsername(validatedData.username);
+
+      const existingUser = await storage.getUserByUsername(
+        validatedData.username
+      );
       if (existingUser) {
         return res.status(400).json({ error: "Username already exists" });
       }
@@ -102,7 +114,9 @@ export function setupAuth(app: Express) {
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid data", details: error.errors });
+        return res
+          .status(400)
+          .json({ error: "Invalid data", details: error.errors });
       }
       res.status(500).json({ error: "Registration failed" });
     }
@@ -111,12 +125,15 @@ export function setupAuth(app: Express) {
   app.post("/api/login", (req, res, next) => {
     try {
       // Validate request body with Zod schema for login (username and password only)
-      const loginSchema = insertUserSchema.pick({ username: true, password: true });
+      const loginSchema = insertUserSchema.pick({
+        username: true,
+        password: true,
+      });
       const validatedData = loginSchema.parse(req.body);
-      
+
       // Update req.body with validated data for passport
       req.body = validatedData;
-      
+
       passport.authenticate("local", (err: any, user: any, info: any) => {
         if (err) return next(err);
         if (!user) {
@@ -129,7 +146,9 @@ export function setupAuth(app: Express) {
       })(req, res, next);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid data", details: error.errors });
+        return res
+          .status(400)
+          .json({ error: "Invalid data", details: error.errors });
       }
       next(error);
     }
