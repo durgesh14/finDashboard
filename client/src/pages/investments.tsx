@@ -23,7 +23,8 @@ import {
   PieChart,
   BarChart3,
   Target,
-  Clock
+  Clock,
+  CreditCard
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -55,12 +56,30 @@ export default function Investments() {
   const [viewMode, setViewMode] = useState<"grid" | "table">("table");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingInvestment, setEditingInvestment] = useState<Investment | null>(null);
+  const [isAddTransactionOpen, setIsAddTransactionOpen] = useState(false);
+  const [selectedInvestmentForTransaction, setSelectedInvestmentForTransaction] = useState<Investment | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { data: investments, isLoading } = useQuery<Investment[]>({
     queryKey: ["/api/investments"],
+  });
+
+  const { data: groupedTransactions, isLoading: groupedTransactionsLoading } = useQuery<Array<{
+    displayName: string;
+    sortKey: string;
+    transactions: Array<{
+      id: string;
+      investmentId: string;
+      amount: string;
+      transactionDate: string;
+      notes: string | null;
+      createdAt: string;
+      investment: Investment;
+    }>;
+  }>>({
+    queryKey: ["/api/transactions/grouped"],
   });
 
   const { data: investmentTypes, isLoading: investmentTypesLoading } = useQuery<InvestmentType[]>({
@@ -81,6 +100,28 @@ export default function Investments() {
       toast({
         title: "Error",
         description: "Failed to delete investment",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const addTransactionMutation = useMutation({
+    mutationFn: (data: { investmentId: string; amount: string; transactionDate: string; notes?: string }) => 
+      apiRequest("POST", "/api/transactions", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/transactions/grouped"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/summary"] });
+      setIsAddTransactionOpen(false);
+      setSelectedInvestmentForTransaction(null);
+      toast({
+        title: "Success",
+        description: "Monthly payment recorded successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to record payment",
         variant: "destructive",
       });
     },
@@ -146,6 +187,24 @@ export default function Investments() {
     if (!open) {
       setEditingInvestment(null);
     }
+  };
+
+  const handleAddTransaction = (investment: Investment) => {
+    setSelectedInvestmentForTransaction(investment);
+    setIsAddTransactionOpen(true);
+  };
+
+  const handleQuickAddPayment = (investment: Investment) => {
+    const today = new Date().toISOString().split('T')[0];
+    const amount = investment.paymentAmount ? investment.paymentAmount : 
+                   (investment.paymentFrequency === 'monthly' ? '1000' : '5000'); // Default amounts as strings
+    
+    addTransactionMutation.mutate({
+      investmentId: investment.id,
+      amount: amount,
+      transactionDate: today,
+      notes: `${investment.paymentFrequency} payment for ${investment.name}`
+    });
   };
 
   const handleDelete = (id: string, name: string) => {
@@ -218,8 +277,22 @@ export default function Investments() {
     activeCount: filteredInvestments.filter(inv => inv.isActive).length
   };
 
-  // Group investments by year and month
-  const groupedInvestments = filteredInvestments.reduce((groups, investment) => {
+  // Use the grouped transactions from the API, but filter based on current filters
+  const filteredGroupedTransactions = groupedTransactions?.map(group => ({
+    ...group,
+    transactions: group.transactions.filter(transaction => {
+      const investment = transaction.investment;
+      const matchesSearch = investment.name.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesType = typeFilter === "all" || !typeFilter || investment.type === typeFilter;
+      const matchesStatus = statusFilter === "all" || !statusFilter || 
+        (statusFilter === "active" && investment.isActive) ||
+        (statusFilter === "inactive" && !investment.isActive);
+      return matchesSearch && matchesType && matchesStatus;
+    })
+  })).filter(group => group.transactions.length > 0) || [];
+
+  // Fallback: If no transactions exist, group investments by start date for initial display
+  const fallbackGroupedInvestments = filteredInvestments.reduce((groups, investment) => {
     const date = new Date(investment.startDate);
     const monthYear = date.toLocaleDateString('en-GB', { year: 'numeric', month: 'long' });
     const sortKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -236,10 +309,22 @@ export default function Investments() {
     return groups;
   }, {} as Record<string, { displayName: string; sortKey: string; investments: Investment[] }>);
 
-  // Sort groups by date (most recent first)
-  const sortedGroups = Object.values(groupedInvestments).sort((a, b) => 
+  const fallbackSortedGroups = Object.values(fallbackGroupedInvestments).sort((a, b) => 
     b.sortKey.localeCompare(a.sortKey)
   );
+
+  // Use transactions if available, otherwise show investments
+  const hasTransactions = filteredGroupedTransactions.length > 0;
+  const displayGroups = hasTransactions ? filteredGroupedTransactions : null;
+
+  // Calculate total transactions and unique investments for the filtered data
+  const totalTransactionStats = {
+    totalTransactionAmount: filteredGroupedTransactions.reduce((sum, group) => 
+      sum + group.transactions.reduce((groupSum, tx) => groupSum + parseFloat(tx.amount), 0), 0),
+    totalTransactionCount: filteredGroupedTransactions.reduce((count, group) => count + group.transactions.length, 0),
+    uniqueInvestments: new Set(filteredGroupedTransactions.flatMap(group => 
+      group.transactions.map(tx => tx.investmentId))).size
+  };
 
   if (isLoading) {
     return (
@@ -398,7 +483,113 @@ export default function Investments() {
             <h3 className="text-xl font-semibold text-foreground">Investments ({filteredInvestments.length})</h3>
           </div>
           
-          {filteredInvestments.length === 0 ? (
+          {groupedTransactionsLoading ? (
+            <Card>
+              <CardContent className="p-6">
+                <div className="animate-pulse">
+                  <div className="h-6 bg-muted rounded w-1/3 mb-6"></div>
+                  <div className="space-y-4">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="h-16 bg-muted rounded"></div>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ) : hasTransactions ? (
+            // Show monthly transactions when available
+            filteredGroupedTransactions.map((group) => (
+              <Card key={group.sortKey}>
+                <CardHeader className="pb-4">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg font-medium text-foreground flex items-center">
+                      <Calendar className="mr-2" size={18} />
+                      {group.displayName}
+                    </CardTitle>
+                    <Badge variant="outline" className="text-xs">
+                      {group.transactions.length} transaction{group.transactions.length !== 1 ? 's' : ''}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="text-left px-6 py-3 text-sm font-medium text-muted-foreground">Investment</th>
+                          <th className="text-left px-6 py-3 text-sm font-medium text-muted-foreground">Type</th>
+                          <th className="text-right px-6 py-3 text-sm font-medium text-muted-foreground">Amount</th>
+                          <th className="text-center px-6 py-3 text-sm font-medium text-muted-foreground">Date</th>
+                          <th className="text-center px-6 py-3 text-sm font-medium text-muted-foreground">Notes</th>
+                          <th className="text-right px-6 py-3 text-sm font-medium text-muted-foreground">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {group.transactions.map((transaction) => {
+                          const investment = transaction.investment;
+                          return (
+                            <tr key={transaction.id} className="hover:bg-muted/30 transition-colors" data-testid={`row-transaction-${transaction.id}`}>
+                              <td className="px-6 py-4">
+                                <div>
+                                  <p className="font-medium text-foreground">{investment.name}</p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {investment.expectedReturn ? `${investment.expectedReturn}%` : 'N/A'} • {investment.paymentFrequency.replace('_', ' ')}
+                                  </p>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                {(() => {
+                                  const typeIndex = investmentTypes?.findIndex(t => t.id === investment.type) ?? 0;
+                                  const typeLabel = investmentTypes?.find(t => t.id === investment.type)?.name || investment.type;
+                                  return (
+                                    <Badge className={getTypeColor(typeIndex)}>
+                                      {typeLabel}
+                                    </Badge>
+                                  );
+                                })()}
+                              </td>
+                              <td className="px-6 py-4 text-right text-foreground font-medium">
+                                {formatCurrency(transaction.amount)}
+                              </td>
+                              <td className="px-6 py-4 text-center text-sm text-muted-foreground">
+                                {new Date(transaction.transactionDate).toLocaleDateString('en-GB')}
+                              </td>
+                              <td className="px-6 py-4 text-center text-sm text-muted-foreground">
+                                {transaction.notes || '-'}
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                <div className="flex items-center justify-end space-x-2">
+                                  <Button 
+                                    variant="ghost"
+                                    size="sm"
+                                    title="View Investment Details"
+                                    onClick={() => handleEditInvestment(investment)}
+                                    data-testid={`button-view-investment-${investment.id}`}
+                                  >
+                                    <Eye size={16} />
+                                  </Button>
+                                  <Button 
+                                    variant="ghost"
+                                    size="sm"
+                                    title="Edit Investment"
+                                    onClick={() => handleEditInvestment(investment)}
+                                    data-testid={`button-edit-investment-${investment.id}`}
+                                  >
+                                    <Edit size={16} />
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          ) : fallbackSortedGroups.length === 0 ? (
+            // No investments found
             <Card>
               <CardContent>
                 <div className="text-center py-12 text-muted-foreground">
@@ -417,7 +608,8 @@ export default function Investments() {
               </CardContent>
             </Card>
           ) : (
-            sortedGroups.map((group) => (
+            // Show investments grouped by start date when no transactions exist
+            fallbackSortedGroups.map((group) => (
               <Card key={group.sortKey}>
                 <CardHeader className="pb-4">
                   <div className="flex items-center justify-between">
@@ -437,7 +629,7 @@ export default function Investments() {
                         <tr>
                           <th className="text-left px-6 py-3 text-sm font-medium text-muted-foreground">Investment</th>
                           <th className="text-left px-6 py-3 text-sm font-medium text-muted-foreground">Type</th>
-                          <th className="text-right px-6 py-3 text-sm font-medium text-muted-foreground">Invested</th>
+                          <th className="text-right px-6 py-3 text-sm font-medium text-muted-foreground">Principal Amount</th>
                           <th className="text-center px-6 py-3 text-sm font-medium text-muted-foreground">Status</th>
                           <th className="text-center px-6 py-3 text-sm font-medium text-muted-foreground">Start Date</th>
                           <th className="text-right px-6 py-3 text-sm font-medium text-muted-foreground">Actions</th>
@@ -479,6 +671,16 @@ export default function Investments() {
                               </td>
                               <td className="px-6 py-4 text-right">
                                 <div className="flex items-center justify-end space-x-2">
+                                  <Button 
+                                    variant="ghost"
+                                    size="sm"
+                                    title="Add Monthly Payment"
+                                    onClick={() => handleQuickAddPayment(investment)}
+                                    disabled={addTransactionMutation.isPending}
+                                    data-testid={`button-add-payment-${investment.id}`}
+                                  >
+                                    <CreditCard size={16} />
+                                  </Button>
                                   <Button 
                                     variant="ghost"
                                     size="sm"

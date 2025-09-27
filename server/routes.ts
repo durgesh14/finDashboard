@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { initializeStorage, setStorage, IStorage } from "./storage";
-import { insertInvestmentSchema, insertTransactionSchema, insertBillSchema, insertBillPaymentSchema, insertInvestmentTypeSchema, insertBillCategorySchema } from "@shared/schema";
+import { insertInvestmentSchema, insertTransactionSchema, insertBillSchema, insertBillPaymentSchema, insertInvestmentTypeSchema, insertBillCategorySchema, Transaction, Investment } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth } from "./auth";
 
@@ -115,6 +115,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to create transaction" });
+    }
+  });
+
+  // Get transactions grouped by month/year for investments view
+  app.get("/api/transactions/grouped", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const investments = await appStorage.getInvestments(userId);
+      const allTransactions = await appStorage.getAllTransactionsForUser(userId);
+      
+      // Create a map of investment ID to investment details
+      const investmentMap = new Map(investments.map(inv => [inv.id, inv]));
+      
+      // Group transactions by month/year
+      const groupedTransactions = allTransactions.reduce((groups, transaction) => {
+        const investment = investmentMap.get(transaction.investmentId);
+        if (!investment) return groups; // Skip transactions for non-existent investments
+        
+        const date = new Date(transaction.transactionDate);
+        const monthYear = date.toLocaleDateString('en-GB', { year: 'numeric', month: 'long' });
+        const sortKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        
+        if (!groups[sortKey]) {
+          groups[sortKey] = {
+            displayName: monthYear,
+            sortKey,
+            transactions: []
+          };
+        }
+        
+        groups[sortKey].transactions.push({
+          ...transaction,
+          investment: investment
+        });
+        
+        return groups;
+      }, {} as Record<string, { displayName: string; sortKey: string; transactions: (Transaction & { investment: Investment })[] }>);
+      
+      // Sort groups by date (most recent first)
+      const sortedGroups = Object.values(groupedTransactions).sort((a, b) => 
+        b.sortKey.localeCompare(a.sortKey)
+      );
+      
+      res.json(sortedGroups);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch grouped transactions" });
     }
   });
 

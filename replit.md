@@ -82,3 +82,5 @@ The application uses a five-tier data model:
 ## Development Environment
 - **Replit Integration**: Custom plugins for development banner and cartographer
 - **Runtime Error Overlay**: Development error handling and debugging
+- **Hosting Configuration**: Configured for Replit environment with proper host allowance and port 5000 binding
+- **Deployment**: Configured for autoscale deployment with build and start scripts
