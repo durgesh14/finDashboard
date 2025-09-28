@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Header } from "@/components/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,19 +56,58 @@ const billCategorySchema = z.object({
   isDefault: z.boolean().optional()
 });
 
+const profileSchema = z.object({
+  username: z.string().min(1, "Username is required"),
+  email: z.string().email("Invalid email").optional().or(z.literal("")),
+});
+
 export default function Settings() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  // Profile settings
-  const [profileSettings, setProfileSettings] = useState({
-    firstName: "John",
-    lastName: "Doe", 
-    email: "john.doe@example.com",
-    phone: "+91 98765 43210",
-    currency: "INR",
-    language: "en",
-    timezone: "Asia/Kolkata"
+  // Fetch user profile
+  const { data: userProfile, isLoading: profileLoading } = useQuery({
+    queryKey: ["/api/profile"],
+  });
+
+  // Profile form
+  const profileForm = useForm({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      username: "",
+      email: "",
+    },
+  });
+
+  // Update form when profile data loads
+  useEffect(() => {
+    if (userProfile) {
+      profileForm.reset({
+        username: (userProfile as any).username || "",
+        email: (userProfile as any).email || "",
+      });
+    }
+  }, [userProfile, profileForm]);
+
+  // Profile update mutation
+  const updateProfileMutation = useMutation({
+    mutationFn: async (data: { username?: string; email?: string }) => {
+      return apiRequest("PUT", "/api/profile", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/profile"] });
+      toast({
+        title: "Profile Updated",
+        description: "Your profile has been updated successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update profile.",
+        variant: "destructive",
+      });
+    },
   });
 
   // Notification settings
@@ -242,11 +281,13 @@ export default function Settings() {
     },
   });
 
-  const handleSaveProfile = () => {
-    toast({
-      title: "Profile Updated",
-      description: "Your profile settings have been saved successfully.",
-    });
+  const handleSaveProfile = (data: { username: string; email?: string }) => {
+    const updateData: { username?: string; email?: string } = {};
+    
+    if (data.username) updateData.username = data.username;
+    if (data.email && data.email.trim() !== "") updateData.email = data.email;
+    
+    updateProfileMutation.mutate(updateData);
   };
 
   const handleSaveNotifications = () => {
@@ -648,7 +689,7 @@ export default function Settings() {
             </Card>
           </TabsContent>
 
-          {/* Profile Settings - Keep existing */}
+          {/* Profile Settings */}
           <TabsContent value="profile">
             <Card>
               <CardHeader>
@@ -658,52 +699,66 @@ export default function Settings() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName">First Name</Label>
-                    <Input 
-                      id="firstName"
-                      value={profileSettings.firstName}
-                      onChange={(e) => setProfileSettings({...profileSettings, firstName: e.target.value})}
-                      data-testid="input-first-name"
-                    />
+                {profileLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <RefreshCw className="animate-spin mr-2" size={16} />
+                    Loading profile...
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName">Last Name</Label>
-                    <Input 
-                      id="lastName"
-                      value={profileSettings.lastName}
-                      onChange={(e) => setProfileSettings({...profileSettings, lastName: e.target.value})}
-                      data-testid="input-last-name"
-                    />
-                  </div>
-                </div>
+                ) : (
+                  <Form {...profileForm}>
+                    <form onSubmit={profileForm.handleSubmit(handleSaveProfile)} className="space-y-6">
+                      <FormField
+                        control={profileForm.control}
+                        name="username"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Username</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                data-testid="input-username"
+                                placeholder="Enter your username"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email Address</Label>
-                  <Input 
-                    id="email"
-                    type="email"
-                    value={profileSettings.email}
-                    onChange={(e) => setProfileSettings({...profileSettings, email: e.target.value})}
-                    data-testid="input-email"
-                  />
-                </div>
+                      <FormField
+                        control={profileForm.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Email Address (Optional)</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                type="email"
+                                data-testid="input-email"
+                                placeholder="Enter your email address"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <Input 
-                    id="phone"
-                    value={profileSettings.phone}
-                    onChange={(e) => setProfileSettings({...profileSettings, phone: e.target.value})}
-                    data-testid="input-phone"
-                  />
-                </div>
-
-                <Button onClick={handleSaveProfile} data-testid="button-save-profile">
-                  <Save className="mr-2" size={16} />
-                  Save Profile
-                </Button>
+                      <Button 
+                        type="submit" 
+                        disabled={updateProfileMutation.isPending}
+                        data-testid="button-save-profile"
+                      >
+                        {updateProfileMutation.isPending ? (
+                          <RefreshCw className="animate-spin mr-2" size={16} />
+                        ) : (
+                          <Save className="mr-2" size={16} />
+                        )}
+                        {updateProfileMutation.isPending ? "Saving..." : "Save Profile"}
+                      </Button>
+                    </form>
+                  </Form>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

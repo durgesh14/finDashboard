@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Investment, type InsertInvestment, type Transaction, type InsertTransaction, type Bill, type InsertBill, type BillPayment, type InsertBillPayment, type InvestmentType, type InsertInvestmentType, type BillCategory, type InsertBillCategory } from "@shared/schema";
+import { type User, type InsertUser, type UpdateUserProfile, type Investment, type InsertInvestment, type Transaction, type InsertTransaction, type Bill, type InsertBill, type BillPayment, type InsertBillPayment, type InvestmentType, type InsertInvestmentType, type BillCategory, type InsertBillCategory } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { calculateNextBillDueDate, formatDateForStorage } from "./date-utils";
 import session from "express-session";
@@ -11,6 +11,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUserProfile(id: string, profile: UpdateUserProfile): Promise<User | undefined>;
 
   // Investment methods
   getInvestments(userId: string): Promise<Investment[]>;
@@ -129,9 +130,21 @@ export class MemStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
-    const user: User = { ...insertUser, id };
+    const user: User = { ...insertUser, id, email: null };
     this.users.set(id, user);
     return user;
+  }
+
+  async updateUserProfile(id: string, profile: UpdateUserProfile): Promise<User | undefined> {
+    const user = this.users.get(id);
+    if (!user) return undefined;
+
+    const updatedUser: User = {
+      ...user,
+      ...profile,
+    };
+    this.users.set(id, updatedUser);
+    return updatedUser;
   }
 
   async getInvestments(userId: string): Promise<Investment[]> {

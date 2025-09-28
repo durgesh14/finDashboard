@@ -347,13 +347,6 @@ export function InvestmentTable({ onEditInvestment }: InvestmentTableProps) {
                         <div className="flex items-center justify-end space-x-2">
                           <button 
                             className="p-2 text-muted-foreground hover:text-foreground transition-colors" 
-                            title="View Details"
-                            data-testid={`button-view-${investment.id}`}
-                          >
-                            <Eye size={16} />
-                          </button>
-                          <button 
-                            className="p-2 text-muted-foreground hover:text-foreground transition-colors" 
                             title="Edit"
                             onClick={() => onEditInvestment?.(investment)}
                             data-testid={`button-edit-${investment.id}`}

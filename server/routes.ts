@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { initializeStorage, setStorage, IStorage } from "./storage";
-import { insertInvestmentSchema, insertTransactionSchema, insertBillSchema, insertBillPaymentSchema, insertInvestmentTypeSchema, insertBillCategorySchema, Transaction, Investment } from "@shared/schema";
+import { insertInvestmentSchema, insertTransactionSchema, insertBillSchema, insertBillPaymentSchema, insertInvestmentTypeSchema, insertBillCategorySchema, updateUserProfileSchema, Transaction, Investment } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth } from "./auth";
 
@@ -24,6 +24,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Reference integration: blueprint:javascript_auth_all_persistance
   // Setup authentication routes: /api/register, /api/login, /api/logout, /api/user
   setupAuth(app);
+  
+  // Profile management endpoints
+  app.get("/api/profile", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const user = await appStorage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      // Return user profile without password
+      const { password, ...profile } = user;
+      res.json(profile);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch profile" });
+    }
+  });
+
+  app.put("/api/profile", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const validatedData = updateUserProfileSchema.parse(req.body);
+      
+      // Check if username is being changed and if it's already taken
+      if (validatedData.username) {
+        const existingUser = await appStorage.getUserByUsername(validatedData.username);
+        if (existingUser && existingUser.id !== userId) {
+          return res.status(400).json({ error: "Username already taken" });
+        }
+      }
+      
+      const updatedUser = await appStorage.updateUserProfile(userId, validatedData);
+      if (!updatedUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      // Return updated profile without password
+      const { password, ...profile } = updatedUser;
+      res.json(profile);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to update profile" });
+    }
+  });
   
   // Get all investments
   app.get("/api/investments", requireAuth, async (req: any, res) => {
@@ -55,6 +100,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = insertInvestmentSchema.parse(req.body);
       const userId = req.user.id;
       const investment = await appStorage.createInvestment(userId, validatedData);
+      
+      // Auto-create initial transaction if principal amount > 0
+      const principalAmount = parseFloat(validatedData.principalAmount);
+      if (principalAmount > 0) {
+        const initialTransactionData = {
+          investmentId: investment.id,
+          amount: principalAmount,
+          transactionDate: validatedData.startDate,
+          notes: "Initial investment amount"
+        };
+        
+        try {
+          // Validate transaction data through schema to ensure consistency
+          const validatedTransaction = insertTransactionSchema.parse(initialTransactionData);
+          await appStorage.createTransaction(validatedTransaction);
+        } catch (transactionError) {
+          console.error("Failed to create initial transaction:", transactionError);
+          // Continue without failing the investment creation to maintain backwards compatibility
+          // The investment exists but initial transaction is missing - user can manually add it
+        }
+      }
+      
       res.status(201).json(investment);
     } catch (error) {
       if (error instanceof z.ZodError) {

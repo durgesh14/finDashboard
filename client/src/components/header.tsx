@@ -62,15 +62,6 @@ export function Header() {
           </nav>
           
           <div className="flex items-center space-x-4">
-            <button 
-              className="relative p-2 text-muted-foreground hover:text-foreground transition-colors" 
-              data-testid="button-notifications"
-            >
-              <Bell size={20} />
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center">
-                3
-              </span>
-            </button>
             <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center" data-testid="avatar-user">
               <User className="text-muted-foreground" size={16} />
             </div>

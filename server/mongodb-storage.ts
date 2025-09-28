@@ -2,6 +2,7 @@ import { MongoClient, Db, Collection } from "mongodb";
 import {
   type User,
   type InsertUser,
+  type UpdateUserProfile,
   type Investment,
   type InsertInvestment,
   type Transaction,
@@ -148,9 +149,24 @@ export class MongoStorage implements IStorage {
     const user: User = {
       ...insertUser,
       id: this.generateId(),
+      email: null,
     };
     await this.users.insertOne(user);
     return user;
+  }
+
+  async updateUserProfile(id: string, profile: UpdateUserProfile): Promise<User | undefined> {
+    const updateDoc: any = {};
+    if (profile.username !== undefined) updateDoc.username = profile.username;
+    if (profile.email !== undefined) updateDoc.email = profile.email;
+
+    const result = await this.users.findOneAndUpdate(
+      { id },
+      { $set: updateDoc },
+      { returnDocument: 'after' }
+    );
+    
+    return result || undefined;
   }
 
   // Investment methods

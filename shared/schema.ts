@@ -7,6 +7,7 @@ export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  email: text("email"),
 });
 
 export const investments = pgTable("investments", {
@@ -70,6 +71,11 @@ export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
 });
+
+export const updateUserProfileSchema = createInsertSchema(users).pick({
+  username: true,
+  email: true,
+}).partial();
 
 export const insertInvestmentSchema = createInsertSchema(investments).omit({
   id: true,
@@ -146,6 +152,7 @@ export const insertBillCategorySchema = createInsertSchema(billCategories).omit(
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type UpdateUserProfile = z.infer<typeof updateUserProfileSchema>;
 export type User = typeof users.$inferSelect;
 export type Investment = typeof investments.$inferSelect;
 export type InsertInvestment = z.infer<typeof insertInvestmentSchema>;

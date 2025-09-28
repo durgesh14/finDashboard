@@ -1032,14 +1032,6 @@ export default function Bills() {
                                     <Button 
                                       variant="ghost"
                                       size="sm"
-                                      title="View Details"
-                                      data-testid={`button-view-${bill.id}`}
-                                    >
-                                      <Eye size={16} />
-                                    </Button>
-                                    <Button 
-                                      variant="ghost"
-                                      size="sm"
                                       title="Record Payment"
                                       onClick={() => handleRecordPayment(bill)}
                                       data-testid={`button-record-payment-${bill.id}`}
