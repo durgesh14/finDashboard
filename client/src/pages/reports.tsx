@@ -4,7 +4,7 @@ import { Header } from "@/components/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Investment } from "@shared/schema";
+import { Investment, Transaction, Bill } from "@shared/schema";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from "recharts";
 import { useState } from "react";
 
@@ -14,9 +14,34 @@ export default function Reports() {
   const [timeRange, setTimeRange] = useState("6months");
   const [reportType, setReportType] = useState("performance");
 
-  const { data: investments, isLoading } = useQuery<Investment[]>({
+  const { data: investments, isLoading: investmentsLoading } = useQuery<Investment[]>({
     queryKey: ["/api/investments"],
   });
+
+  const { data: transactions, isLoading: transactionsLoading } = useQuery<any[]>({
+    queryKey: ["/api/transactions/grouped"],
+  });
+
+  const { data: bills, isLoading: billsLoading } = useQuery<Bill[]>({
+    queryKey: ["/api/bills"],
+  });
+
+  const { data: billsSummary, isLoading: billsSummaryLoading } = useQuery<any>({
+    queryKey: ["/api/bills/summary"],
+  });
+
+  const { data: billPayments, isLoading: billPaymentsLoading } = useQuery<any[]>({
+    queryKey: ["/api/bills/payments"],
+    retry: false,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  const { data: investmentTypes, isLoading: investmentTypesLoading } = useQuery<any[]>({
+    queryKey: ["/api/investment-types"],
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  const isLoading = investmentsLoading || transactionsLoading || billsLoading || billsSummaryLoading || billPaymentsLoading || investmentTypesLoading;
 
   if (isLoading) {
     return (
@@ -71,57 +96,62 @@ export default function Reports() {
     return investments.filter(investment => new Date(investment.startDate) >= cutoffDate);
   };
 
-  const calculatePerformanceData = () => {
+  const calculateInvestmentData = () => {
     const filteredInvestments = getFilteredInvestments();
-    if (!filteredInvestments.length) return [];
+    // If no filtered investments, use all investments to ensure charts show data
+    const investmentsToUse = filteredInvestments.length > 0 ? filteredInvestments : (investments || []);
+    if (!investmentsToUse.length) return [];
     
-    return filteredInvestments.map(investment => {
+    return investmentsToUse.map(investment => {
       const principal = parseFloat(investment.principalAmount);
-      const returnRate = investment.expectedReturn ? parseFloat(investment.expectedReturn) / 100 : 0.08;
-      const months = Math.max(1, Math.floor((Date.now() - new Date(investment.startDate).getTime()) / (1000 * 60 * 60 * 24 * 30)));
-      const currentValue = principal * Math.pow(1 + returnRate/12, months);
-      const gains = currentValue - principal;
-      const gainsPercentage = (gains / principal) * 100;
+      const paymentAmount = investment.paymentAmount ? parseFloat(investment.paymentAmount) : 0;
 
       return {
         name: investment.name.length > 15 ? investment.name.substring(0, 15) + '...' : investment.name,
         principal,
-        currentValue,
-        gains,
-        gainsPercentage: gainsPercentage.toFixed(1),
-        type: investment.type
+        paymentAmount,
+        type: investment.type,
+        frequency: investment.paymentFrequency
       };
     });
   };
 
   const calculateAllocationData = () => {
     const filteredInvestments = getFilteredInvestments();
-    if (!filteredInvestments.length) return [];
+    // If no filtered investments, use all investments to ensure charts show data
+    const investmentsToUse = filteredInvestments.length > 0 ? filteredInvestments : (investments || []);
+    if (!investmentsToUse.length) return [];
 
-    const typeGroups = filteredInvestments.reduce((acc, investment) => {
-      const type = investment.type;
+    // Create investment type mapping
+    const typeMap = investmentTypes?.reduce((map, type) => {
+      map[type.id] = type.name;
+      return map;
+    }, {} as Record<string, string>) || {};
+
+    const typeGroups = investmentsToUse.reduce((acc, investment) => {
+      const typeId = investment.type;
+      const typeName = typeMap[typeId] || typeId; // Use name if available, fallback to ID
       const amount = parseFloat(investment.principalAmount);
       
-      if (!acc[type]) {
-        acc[type] = { 
-          type, 
+      if (!acc[typeName]) {
+        acc[typeName] = { 
+          type: typeName, 
           value: 0, 
           count: 0,
-          name: type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
+          name: typeName
         };
       }
       
-      acc[type].value += amount;
-      acc[type].count += 1;
+      acc[typeName].value += amount;
+      acc[typeName].count += 1;
       return acc;
     }, {} as Record<string, any>);
 
     return Object.values(typeGroups);
   };
 
-  const calculateMonthlyTrends = () => {
-    const filteredInvestments = getFilteredInvestments();
-    if (!filteredInvestments.length) return [];
+  const calculateTransactionTrends = () => {
+    if (!transactions?.length) return [];
     
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const currentDate = new Date();
@@ -146,40 +176,41 @@ export default function Reports() {
     for (let i = monthsToShow - 1; i >= 0; i--) {
       const month = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
       const monthName = months[month.getMonth()];
+      const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() - i + 1, 0);
       
-      const monthlyInvestments = filteredInvestments.filter(inv => {
-        const startDate = new Date(inv.startDate);
-        return startDate <= month;
+      // Calculate total transactions for this month
+      let monthlyTransactionTotal = 0;
+      transactions.forEach(group => {
+        group.transactions.forEach((tx: any) => {
+          const txDate = new Date(tx.transactionDate);
+          if (txDate >= month && txDate <= monthEnd) {
+            monthlyTransactionTotal += parseFloat(tx.amount);
+          }
+        });
       });
-
-      const totalInvested = monthlyInvestments.reduce((sum, inv) => sum + parseFloat(inv.principalAmount), 0);
-      const totalValue = monthlyInvestments.reduce((sum, inv) => {
-        const principal = parseFloat(inv.principalAmount);
-        const returnRate = inv.expectedReturn ? parseFloat(inv.expectedReturn) / 100 : 0.08;
-        const monthsElapsed = Math.max(1, Math.floor((month.getTime() - new Date(inv.startDate).getTime()) / (1000 * 60 * 60 * 24 * 30)));
-        return sum + (principal * Math.pow(1 + returnRate/12, monthsElapsed));
-      }, 0);
 
       trends.push({
         month: monthName,
-        invested: Math.round(totalInvested),
-        value: Math.round(totalValue),
-        gains: Math.round(totalValue - totalInvested)
+        transactions: Math.round(monthlyTransactionTotal)
       });
     }
 
     return trends;
   };
 
-  const performanceData = calculatePerformanceData();
-  const allocationData = calculateAllocationData();
-  const monthlyTrends = calculateMonthlyTrends();
   const filteredInvestments = getFilteredInvestments();
+  const investmentData = calculateInvestmentData();
+  const allocationData = calculateAllocationData();
+  const transactionTrends = calculateTransactionTrends();
 
-  const totalInvested = filteredInvestments.reduce((sum, inv) => sum + parseFloat(inv.principalAmount), 0);
-  const totalCurrentValue = performanceData.reduce((sum, item) => sum + item.currentValue, 0);
-  const totalGains = totalCurrentValue - totalInvested;
-  const totalGainsPercentage = totalInvested > 0 ? ((totalGains / totalInvested) * 100) : 0;
+  // Total Invested should show ALL investments, not filtered by time range
+  const totalInvested = investments?.reduce((sum, inv) => sum + parseFloat(inv.principalAmount), 0) || 0;
+  const totalTransactions = transactions?.reduce((sum, group) => {
+    return sum + group.transactions.reduce((groupSum: number, tx: any) => groupSum + parseFloat(tx.amount), 0);
+  }, 0) || 0;
+  const totalBillsMonthly = billsSummary?.monthlyEquivalent || 0;
+  const activeBillsCount = bills?.filter(bill => bill.isActive).length || 0;
+  const totalBillPayments = billPayments?.reduce((sum, payment) => sum + parseFloat(payment.amount), 0) || 0;
 
   const exportToCSV = () => {
     if (!filteredInvestments?.length) {
@@ -193,7 +224,7 @@ export default function Reports() {
       'Principal Amount': inv.principalAmount,
       'Start Date': inv.startDate,
       'Payment Frequency': inv.paymentFrequency,
-      'Expected Return': inv.expectedReturn || 'N/A',
+      'Payment Amount': inv.paymentAmount || 'N/A',
       'Maturity Date': inv.maturityDate || 'N/A',
       Status: inv.isActive ? 'Active' : 'Inactive'
     }));
@@ -238,8 +269,8 @@ export default function Reports() {
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
             <div>
-              <h2 className="text-2xl font-bold text-foreground">Investment Reports</h2>
-              <p className="text-muted-foreground mt-1">Analyze your portfolio performance and trends</p>
+              <h2 className="text-2xl font-bold text-foreground">Financial Reports</h2>
+              <p className="text-muted-foreground mt-1">View your investments, transactions, and bills overview</p>
             </div>
             <div className="flex items-center space-x-4 mt-4 sm:mt-0">
               <Select value={timeRange} onValueChange={setTimeRange}>
@@ -266,7 +297,7 @@ export default function Reports() {
           </div>
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <Card>
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
@@ -285,12 +316,12 @@ export default function Reports() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-muted-foreground text-sm font-medium">Current Value</p>
-                    <p className="text-2xl font-bold text-foreground mt-2" data-testid="text-current-value-report">
-                      {formatCurrency(totalCurrentValue)}
+                    <p className="text-muted-foreground text-sm font-medium">Monthly Bills</p>
+                    <p className="text-2xl font-bold text-foreground mt-2" data-testid="text-monthly-bills-report">
+                      {formatCurrency(totalBillsMonthly)}
                     </p>
                   </div>
-                  <BarChart3 className="text-green-500" size={24} />
+                  <TrendingUp className="text-orange-500" size={24} />
                 </div>
               </CardContent>
             </Card>
@@ -299,23 +330,9 @@ export default function Reports() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-muted-foreground text-sm font-medium">Total Gains</p>
-                    <p className="text-2xl font-bold text-foreground mt-2" data-testid="text-total-gains-report">
-                      {formatCurrency(totalGains)}
-                    </p>
-                  </div>
-                  <TrendingUp className="text-green-500" size={24} />
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-muted-foreground text-sm font-medium">Returns</p>
-                    <p className="text-2xl font-bold text-foreground mt-2" data-testid="text-returns-report">
-                      {totalGainsPercentage.toFixed(1)}%
+                    <p className="text-muted-foreground text-sm font-medium">Bill Payments</p>
+                    <p className="text-2xl font-bold text-foreground mt-2" data-testid="text-bill-payments-report">
+                      {formatCurrency(totalBillPayments)}
                     </p>
                   </div>
                   <PieChartIcon className="text-purple-500" size={24} />
@@ -326,59 +343,42 @@ export default function Reports() {
         </div>
 
         {/* Charts */}
-        {filteredInvestments?.length === 0 ? (
-          <Card className="col-span-full">
-            <CardContent className="p-12 text-center">
-              <PieChartIcon className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold text-foreground mb-2">No Investment Data Available</h3>
-              <p className="text-muted-foreground mb-4">
-                {timeRange === 'all' 
-                  ? 'Add some investments to see your portfolio analytics and reports.'
-                  : `No investments found for the selected time range (${timeRange.replace('months', ' months').replace('year', ' year')}). Try selecting a different time range or add more investments.`
-                }
-              </p>
-              <Button onClick={() => window.location.href = '/'} data-testid="button-add-investments">
-                Add Investments
-              </Button>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+          {/* Investment Overview Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <BarChart3 className="mr-2" size={20} />
+                Investment Overview
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={investmentData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip 
+                      formatter={(value: number, name: string) => [
+                        formatCurrency(value), 
+                        name === 'paymentAmount' ? 'Payment Amount' : 'Principal Amount'
+                      ]}
+                    />
+                    <Bar dataKey="principal" fill="#3B82F6" name="principal" />
+                    <Bar dataKey="paymentAmount" fill="#10B981" name="paymentAmount" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </CardContent>
           </Card>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-            {/* Performance Chart */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <BarChart3 className="mr-2" size={20} />
-                  Investment Performance
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={performanceData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 12 }} />
-                      <Tooltip 
-                        formatter={(value: number, name: string) => [
-                          formatCurrency(value), 
-                          name === 'currentValue' ? 'Current Value' : 'Principal'
-                        ]}
-                      />
-                      <Bar dataKey="principal" fill="#3B82F6" name="principal" />
-                      <Bar dataKey="currentValue" fill="#10B981" name="currentValue" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
 
-          {/* Portfolio Allocation */}
+          {/* Investment Allocation */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
                 <PieChartIcon className="mr-2" size={20} />
-                Portfolio Allocation
+                Investment Allocation
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -421,38 +421,99 @@ export default function Reports() {
             </CardContent>
           </Card>
         </div>
-        )}
 
-        {/* Monthly Trends */}
-        {filteredInvestments?.length > 0 && (
-        <Card>
+        {/* Bills Category Breakdown */}
+        {billsSummary?.categoryBreakdown && Object.keys(billsSummary.categoryBreakdown).length > 0 && (
+        <Card className="mb-8">
           <CardHeader>
             <CardTitle className="flex items-center">
-              <Calendar className="mr-2" size={20} />
-              Monthly Trends
+              <PieChartIcon className="mr-2" size={20} />
+              Bills Category Breakdown
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={monthlyTrends}>
+                <BarChart data={Object.entries(billsSummary.categoryBreakdown).map(([category, data]: [string, any]) => ({
+                  category: category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                  amount: Math.round(data.total),
+                  count: data.count
+                }))}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="category" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip 
+                    formatter={(value: number, name: string) => [
+                      name === 'amount' ? formatCurrency(value) : `${value} bills`,
+                      name === 'amount' ? 'Monthly Amount' : 'Count'
+                    ]}
+                  />
+                  <Bar dataKey="amount" fill="#8B5CF6" name="amount" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+        )}
+
+        {/* Bill Payment History */}
+        {billPayments && billPayments.length > 0 && (
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Calendar className="mr-2" size={20} />
+              Bill Payment History
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={billPayments.slice(-12).map((payment: any) => ({
+                  date: new Date(payment.paidDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                  amount: parseFloat(payment.amount),
+                  status: payment.status
+                }))}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip formatter={(value: number) => [formatCurrency(value), 'Payment Amount']} />
+                  <Line 
+                    type="monotone" 
+                    dataKey="amount" 
+                    stroke="#F59E0B" 
+                    strokeWidth={2} 
+                    name="Payment Amount"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+        )}
+
+        {/* Transaction Trends */}
+        {transactions && transactions.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Calendar className="mr-2" size={20} />
+              Monthly Transaction Trends
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={transactionTrends}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" />
                   <YAxis />
                   <Tooltip formatter={(value: number) => [formatCurrency(value)]} />
                   <Line 
                     type="monotone" 
-                    dataKey="invested" 
+                    dataKey="transactions" 
                     stroke="#3B82F6" 
                     strokeWidth={2} 
-                    name="Invested"
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="value" 
-                    stroke="#10B981" 
-                    strokeWidth={2} 
-                    name="Current Value"
+                    name="Transactions"
                   />
                 </LineChart>
               </ResponsiveContainer>

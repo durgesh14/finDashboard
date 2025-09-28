@@ -532,21 +532,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
       );
 
-      // Category breakdown
+      // Get bill categories to map IDs to names
+      const billCategories = await appStorage.getBillCategories(userId);
+      const categoryMap = billCategories.reduce((map, cat) => {
+        map[cat.id] = cat.name;
+        return map;
+      }, {} as Record<string, string>);
+
+      // Category breakdown using proper ID to name mapping
       const categoryBreakdown = bills
         .filter(bill => bill.isActive)
         .reduce((acc, bill) => {
-          const category = bill.category;
+          // Map category ID to name, fallback to "Unknown Category" if not found
+          const categoryName = categoryMap[bill.category] || "Unknown Category";
           const monthlyAmount = bill.frequency === 'monthly' ? parseFloat(bill.amount) :
                               bill.frequency === 'quarterly' ? parseFloat(bill.amount) / 3 :
                               bill.frequency === 'yearly' ? parseFloat(bill.amount) / 12 :
                               parseFloat(bill.amount);
           
-          if (!acc[category]) {
-            acc[category] = { total: 0, count: 0 };
+          if (!acc[categoryName]) {
+            acc[categoryName] = { total: 0, count: 0 };
           }
-          acc[category].total += monthlyAmount;
-          acc[category].count += 1;
+          acc[categoryName].total += monthlyAmount;
+          acc[categoryName].count += 1;
           return acc;
         }, {} as Record<string, { total: number; count: number }>);
 
@@ -563,6 +571,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch bills summary" });
+    }
+  });
+
+  // Get all bill payments for a year (for summary calculations) - MUST come before parameterized routes
+  app.get("/api/bills/payments", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
+      
+      const bills = await appStorage.getBills(userId);
+      const allPayments: any[] = [];
+      
+      for (const bill of bills) {
+        const payments = await appStorage.getBillPayments(bill.id);
+        const yearPayments = payments.filter(payment => {
+          const paymentYear = new Date(payment.paidDate).getFullYear();
+          return paymentYear === year;
+        });
+        
+        yearPayments.forEach(payment => {
+          allPayments.push({
+            ...payment,
+            billName: bill.name,
+            category: bill.category
+          });
+        });
+      }
+      
+      res.json(allPayments);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch payments" });
     }
   });
 
@@ -605,37 +644,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid payment data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to create payment" });
-    }
-  });
-
-  // Get all bill payments for a year (for summary calculations)
-  app.get("/api/bills/payments", requireAuth, async (req: any, res) => {
-    try {
-      const userId = req.user.id;
-      const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
-      
-      const bills = await appStorage.getBills(userId);
-      const allPayments: any[] = [];
-      
-      for (const bill of bills) {
-        const payments = await appStorage.getBillPayments(bill.id);
-        const yearPayments = payments.filter(payment => {
-          const paymentYear = new Date(payment.paidDate).getFullYear();
-          return paymentYear === year;
-        });
-        
-        yearPayments.forEach(payment => {
-          allPayments.push({
-            ...payment,
-            billName: bill.name,
-            category: bill.category
-          });
-        });
-      }
-      
-      res.json(allPayments);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch payments" });
     }
   });
 
