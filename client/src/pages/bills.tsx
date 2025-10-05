@@ -5,18 +5,30 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Bill, BillPayment, InsertBill, BillCategory } from "@shared/schema";
-import { 
-  Plus, 
-  Search, 
-  Edit, 
-  Trash2, 
+import {
+  Plus,
+  Search,
+  Edit,
+  Trash2,
   Eye,
   Calendar,
   CalendarDays,
@@ -36,30 +48,50 @@ import {
   Zap,
   ShoppingCart,
   Heart,
-  Play
+  Play,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { insertBillSchema, insertBillPaymentSchema } from "@shared/schema";
 import { z } from "zod";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  LineChart,
+  Line,
+} from "recharts";
 
 // Dynamic color generation for bill categories
 const getCategoryColor = (index: number) => {
   const colors = [
-    'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-    'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-    'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-    'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-    'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-    'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200',
-    'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200',
-    'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
-    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-    'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+    "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+    "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+    "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+    "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+    "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+    "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200",
+    "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200",
+    "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200",
+    "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+    "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
   ];
   return colors[index % colors.length];
 };
@@ -75,9 +107,9 @@ const getCategoryIcon = (name: string) => {
     transport: Car,
     healthcare: Heart,
     entertainment: Play,
-    other: Receipt
+    other: Receipt,
   };
-  
+
   // Try to match by name (case insensitive)
   const lowerName = name.toLowerCase();
   for (const [key, icon] of Object.entries(defaultIcons)) {
@@ -85,12 +117,22 @@ const getCategoryIcon = (name: string) => {
       return icon;
     }
   }
-  
+
   // Default icon
   return Receipt;
 };
 
-const CHART_COLORS = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444', '#06B6D4', '#6B7280', '#EC4899', '#84CC16'];
+const CHART_COLORS = [
+  "#3B82F6",
+  "#10B981",
+  "#8B5CF6",
+  "#F59E0B",
+  "#EF4444",
+  "#06B6D4",
+  "#6B7280",
+  "#EC4899",
+  "#84CC16",
+];
 
 interface MonthlyTotal {
   month: number;
@@ -124,10 +166,16 @@ export default function Bills() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingBill, setEditingBill] = useState<Bill | null>(null);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [isRecordPaymentModalOpen, setIsRecordPaymentModalOpen] = useState(false);
-  const [selectedBillForPayment, setSelectedBillForPayment] = useState<Bill | null>(null);
-  const [selectedBillPayments, setSelectedBillPayments] = useState<BillPayment[]>([]);
-  const [editingPayment, setEditingPayment] = useState<BillPayment | null>(null);
+  const [isRecordPaymentModalOpen, setIsRecordPaymentModalOpen] =
+    useState(false);
+  const [selectedBillForPayment, setSelectedBillForPayment] =
+    useState<Bill | null>(null);
+  const [selectedBillPayments, setSelectedBillPayments] = useState<
+    BillPayment[]
+  >([]);
+  const [editingPayment, setEditingPayment] = useState<BillPayment | null>(
+    null
+  );
   const [showNewPaymentForm, setShowNewPaymentForm] = useState(false);
 
   const { toast } = useToast();
@@ -137,17 +185,28 @@ export default function Bills() {
     queryKey: ["/api/bills"],
   });
 
-  const { data: billCategories, isLoading: billCategoriesLoading } = useQuery<BillCategory[]>({
+  const { data: billCategories, isLoading: billCategoriesLoading } = useQuery<
+    BillCategory[]
+  >({
     queryKey: ["/api/bill-categories"],
   });
 
   const { data: summary, isLoading: summaryLoading } = useQuery<BillsSummary>({
     queryKey: ["/api/bills/summary", selectedYear],
-    queryFn: () => fetch(`/api/bills/summary?year=${selectedYear}`).then(res => res.json()),
+    queryFn: () =>
+      fetch(`/api/bills/summary?year=${selectedYear}`).then((res) =>
+        res.json()
+      ),
   });
 
   const recordPaymentMutation = useMutation({
-    mutationFn: (data: { billId: string; amount: number; paidDate: string; dueDate: string; status: string }) =>
+    mutationFn: (data: {
+      billId: string;
+      amount: number;
+      paidDate: string;
+      dueDate: string;
+      status: string;
+    }) =>
       apiRequest("POST", `/api/bills/${data.billId}/payments`, {
         amount: data.amount,
         paidDate: data.paidDate,
@@ -156,7 +215,9 @@ export default function Bills() {
       }),
     onSuccess: () => {
       toast({ title: "Payment recorded successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/bills/summary", selectedYear] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/bills/summary", selectedYear],
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/bills"] });
       handleClosePaymentModal();
     },
@@ -166,7 +227,13 @@ export default function Bills() {
   });
 
   const updatePaymentMutation = useMutation({
-    mutationFn: (data: { id: string; amount: number; paidDate: string; dueDate: string; status: string }) =>
+    mutationFn: (data: {
+      id: string;
+      amount: number;
+      paidDate: string;
+      dueDate: string;
+      status: string;
+    }) =>
       apiRequest("PUT", `/api/bill-payments/${data.id}`, {
         amount: data.amount,
         paidDate: data.paidDate,
@@ -175,7 +242,9 @@ export default function Bills() {
       }),
     onSuccess: () => {
       toast({ title: "Payment updated successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/bills/summary", selectedYear] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/bills/summary", selectedYear],
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/bills"] });
       handleClosePaymentModal();
     },
@@ -185,10 +254,13 @@ export default function Bills() {
   });
 
   const deletePaymentMutation = useMutation({
-    mutationFn: (id: string) => apiRequest("DELETE", `/api/bill-payments/${id}`),
+    mutationFn: (id: string) =>
+      apiRequest("DELETE", `/api/bill-payments/${id}`),
     onSuccess: () => {
       toast({ title: "Payment deleted successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/bills/summary", selectedYear] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/bills/summary", selectedYear],
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/bills"] });
       handleClosePaymentModal();
     },
@@ -221,9 +293,16 @@ export default function Bills() {
       const submitData = {
         ...data,
         amount: data.amount,
-        nextDueDate: data.frequency !== 'one_time' && data.dueDay ? 
-          new Date(new Date().getFullYear(), new Date().getMonth(), data.dueDay).toISOString().split('T')[0] : 
-          null
+        nextDueDate:
+          data.frequency !== "one_time" && data.dueDay
+            ? new Date(
+                new Date().getFullYear(),
+                new Date().getMonth(),
+                data.dueDay
+              )
+                .toISOString()
+                .split("T")[0]
+            : null,
       };
       return apiRequest("POST", "/api/bills", submitData);
     },
@@ -247,13 +326,26 @@ export default function Bills() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: z.infer<typeof billFormSchema> }) => {
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: z.infer<typeof billFormSchema>;
+    }) => {
       const submitData = {
         ...data,
         amount: data.amount,
-        nextDueDate: data.frequency !== 'one_time' && data.dueDay ? 
-          new Date(new Date().getFullYear(), new Date().getMonth(), data.dueDay).toISOString().split('T')[0] : 
-          null
+        nextDueDate:
+          data.frequency !== "one_time" && data.dueDay
+            ? new Date(
+                new Date().getFullYear(),
+                new Date().getMonth(),
+                data.dueDay
+              )
+                .toISOString()
+                .split("T")[0]
+            : null,
       };
       return apiRequest("PUT", `/api/bills/${id}`, submitData);
     },
@@ -300,29 +392,32 @@ export default function Bills() {
     defaultValues: {
       amount: 0,
       billId: "",
-      paidDate: new Date().toISOString().split('T')[0],
-      dueDate: new Date().toISOString().split('T')[0],
+      paidDate: new Date().toISOString().split("T")[0],
+      dueDate: new Date().toISOString().split("T")[0],
       status: "paid",
     },
   });
 
   const formatCurrency = (amount: string | number) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
       maximumFractionDigits: 0,
-    }).format(typeof amount === 'string' ? parseFloat(amount) : amount);
+    }).format(typeof amount === "string" ? parseFloat(amount) : amount);
   };
 
   const getFilteredBills = () => {
     if (!bills) return [];
 
-    return bills.filter(bill => {
-      const matchesSearch = bill.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          bill.vendor?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          false;
-      const matchesCategory = categoryFilter === "all" || bill.category === categoryFilter;
-      const matchesStatus = statusFilter === "all" || 
+    return bills.filter((bill) => {
+      const matchesSearch =
+        bill.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        bill.vendor?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        false;
+      const matchesCategory =
+        categoryFilter === "all" || bill.category === categoryFilter;
+      const matchesStatus =
+        statusFilter === "all" ||
         (statusFilter === "active" && bill.isActive) ||
         (statusFilter === "inactive" && !bill.isActive);
       return matchesSearch && matchesCategory && matchesStatus;
@@ -372,21 +467,23 @@ export default function Bills() {
         setSelectedBillPayments(payments);
       }
     } catch (error) {
-      console.error('Failed to fetch payments:', error);
+      console.error("Failed to fetch payments:", error);
       setSelectedBillPayments([]);
     }
     paymentForm.reset({
       amount: parseFloat(bill.amount),
       billId: bill.id,
-      paidDate: new Date().toISOString().split('T')[0],
-      dueDate: new Date().toISOString().split('T')[0],
+      paidDate: new Date().toISOString().split("T")[0],
+      dueDate: new Date().toISOString().split("T")[0],
       status: "paid",
     });
     setShowNewPaymentForm(selectedBillPayments.length === 0);
     setIsRecordPaymentModalOpen(true);
   };
 
-  const handleRecordPaymentSubmit = (data: z.infer<typeof paymentFormSchema>) => {
+  const handleRecordPaymentSubmit = (
+    data: z.infer<typeof paymentFormSchema>
+  ) => {
     if (editingPayment) {
       // Update existing payment
       updatePaymentMutation.mutate({
@@ -428,19 +525,27 @@ export default function Bills() {
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
-      case 'paid': return 'default';
-      case 'cancelled': return 'destructive';
-      case 'overdue': return 'secondary';
-      default: return 'outline';
+      case "paid":
+        return "default";
+      case "cancelled":
+        return "destructive";
+      case "overdue":
+        return "secondary";
+      default:
+        return "outline";
     }
   };
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'paid': return 'Paid';
-      case 'cancelled': return 'Cancelled';
-      case 'overdue': return 'Overdue';
-      default: return status;
+      case "paid":
+        return "Paid";
+      case "cancelled":
+        return "Cancelled";
+      case "overdue":
+        return "Overdue";
+      default:
+        return status;
     }
   };
 
@@ -459,27 +564,41 @@ export default function Bills() {
   };
 
   const getNextDueDate = (bill: Bill) => {
-    if (bill.frequency === 'one_time' || !bill.dueDay) {
-      return 'One-time';
+    if (bill.frequency === "one_time" || !bill.dueDay) {
+      return "One-time";
     }
-    
+
     const today = new Date();
-    const nextDue = new Date(today.getFullYear(), today.getMonth(), bill.dueDay);
+    const nextDue = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      bill.dueDay
+    );
     if (nextDue < today) {
       nextDue.setMonth(nextDue.getMonth() + 1);
     }
-    
-    return nextDue.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+    return nextDue.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
   };
 
   const getAnnualProjectedTotal = () => {
     if (!summary?.monthlyTotals) return 0;
-    return summary.monthlyTotals.reduce((total, month) => total + month.projected, 0);
+    return summary.monthlyTotals.reduce(
+      (total, month) => total + month.projected,
+      0
+    );
   };
 
   const getAnnualActualTotal = () => {
     if (!summary?.monthlyTotals) return 0;
-    return summary.monthlyTotals.reduce((total, month) => total + month.actual, 0);
+    return summary.monthlyTotals.reduce(
+      (total, month) => total + month.actual,
+      0
+    );
   };
 
   const getYTDActualTotal = () => {
@@ -488,7 +607,9 @@ export default function Bills() {
     const currentMonth = new Date().getMonth();
     const isCurrentYear = selectedYear === new Date().getFullYear();
     const monthsToSum = isCurrentYear ? currentMonth + 1 : 12;
-    return summary.monthlyTotals.slice(0, monthsToSum).reduce((total, month) => total + month.actual, 0);
+    return summary.monthlyTotals
+      .slice(0, monthsToSum)
+      .reduce((total, month) => total + month.actual, 0);
   };
 
   const getYTDProjectedTotal = () => {
@@ -496,21 +617,24 @@ export default function Bills() {
     const currentMonth = new Date().getMonth();
     const isCurrentYear = selectedYear === new Date().getFullYear();
     const monthsToSum = isCurrentYear ? currentMonth + 1 : 12;
-    return summary.monthlyTotals.slice(0, monthsToSum).reduce((total, month) => total + month.projected, 0);
+    return summary.monthlyTotals
+      .slice(0, monthsToSum)
+      .reduce((total, month) => total + month.projected, 0);
   };
 
   const getCategoryChartData = () => {
     if (!summary?.categoryBreakdown) return [];
-    
-    return Object.entries(summary.categoryBreakdown).map(([category, data], index) => {
-      const categoryLabel = billCategories?.find(c => c.id === category)?.name || category;
-      return {
-        name: categoryLabel,
-        value: Math.round(data.total),
-        count: data.count,
-        color: CHART_COLORS[index % CHART_COLORS.length]
-      };
-    });
+
+    return Object.entries(summary.categoryBreakdown).map(
+      ([categoryName, data], index) => {
+        return {
+          name: categoryName,
+          value: Math.round(data.total),
+          count: data.count,
+          color: CHART_COLORS[index % CHART_COLORS.length],
+        };
+      }
+    );
   };
 
   const filteredBills = getFilteredBills();
@@ -540,15 +664,19 @@ export default function Bills() {
   return (
     <div className="min-h-screen bg-background font-sans">
       <Header />
-      
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
             <div>
-              <h2 className="text-2xl font-bold text-foreground">Bills Management</h2>
-              <p className="text-muted-foreground mt-1">Track and manage your bills and expenses</p>
+              <h2 className="text-2xl font-bold text-foreground">
+                Bills Management
+              </h2>
+              <p className="text-muted-foreground mt-1">
+                Track and manage your bills and expenses
+              </p>
             </div>
-            <Button 
+            <Button
               onClick={() => setIsAddModalOpen(true)}
               data-testid="button-add-bill"
             >
@@ -563,8 +691,13 @@ export default function Bills() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-muted-foreground text-sm font-medium">Monthly Equivalent</p>
-                    <p className="text-2xl font-bold text-foreground mt-2" data-testid="text-monthly-equivalent">
+                    <p className="text-muted-foreground text-sm font-medium">
+                      Monthly Equivalent
+                    </p>
+                    <p
+                      className="text-2xl font-bold text-foreground mt-2"
+                      data-testid="text-monthly-equivalent"
+                    >
                       {formatCurrency(summary?.monthlyEquivalent || 0)}
                     </p>
                   </div>
@@ -572,13 +705,18 @@ export default function Bills() {
                 </div>
               </CardContent>
             </Card>
-            
+
             <Card>
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-muted-foreground text-sm font-medium">Due This Week</p>
-                    <p className="text-2xl font-bold text-foreground mt-2" data-testid="text-due-this-week">
+                    <p className="text-muted-foreground text-sm font-medium">
+                      Due This Week
+                    </p>
+                    <p
+                      className="text-2xl font-bold text-foreground mt-2"
+                      data-testid="text-due-this-week"
+                    >
                       {summary?.billsDueThisWeek || 0}
                     </p>
                   </div>
@@ -586,13 +724,18 @@ export default function Bills() {
                 </div>
               </CardContent>
             </Card>
-            
+
             <Card>
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-muted-foreground text-sm font-medium">Active Bills</p>
-                    <p className="text-2xl font-bold text-foreground mt-2" data-testid="text-active-bills">
+                    <p className="text-muted-foreground text-sm font-medium">
+                      Active Bills
+                    </p>
+                    <p
+                      className="text-2xl font-bold text-foreground mt-2"
+                      data-testid="text-active-bills"
+                    >
                       {summary?.activeBillsCount || 0}
                     </p>
                   </div>
@@ -600,14 +743,24 @@ export default function Bills() {
                 </div>
               </CardContent>
             </Card>
-            
+
             <Card>
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-muted-foreground text-sm font-medium">Annual Actual</p>
-                    <p className="text-2xl font-bold text-foreground mt-2" data-testid="text-annual-total">
-                      {formatCurrency(summary?.monthlyTotals?.reduce((sum, month) => sum + month.actual, 0) || 0)}
+                    <p className="text-muted-foreground text-sm font-medium">
+                      Annual Actual
+                    </p>
+                    <p
+                      className="text-2xl font-bold text-foreground mt-2"
+                      data-testid="text-annual-total"
+                    >
+                      {formatCurrency(
+                        summary?.monthlyTotals?.reduce(
+                          (sum, month) => sum + month.actual,
+                          0
+                        ) || 0
+                      )}
                     </p>
                   </div>
                   <BarChart3 className="text-purple-500" size={24} />
@@ -634,7 +787,10 @@ export default function Bills() {
                 <BarChart3 className="mr-2" size={16} />
                 Insights
               </TabsTrigger>
-              <TabsTrigger value="comparison" data-testid="tab-bills-comparison">
+              <TabsTrigger
+                value="comparison"
+                data-testid="tab-bills-comparison"
+              >
                 <PieChartIcon className="mr-2" size={16} />
                 Comparison
               </TabsTrigger>
@@ -660,7 +816,9 @@ export default function Bills() {
                         >
                           ←
                         </Button>
-                        <span className="text-sm font-medium">{selectedYear}</span>
+                        <span className="text-sm font-medium">
+                          {selectedYear}
+                        </span>
                         <Button
                           variant="outline"
                           size="sm"
@@ -683,19 +841,29 @@ export default function Bills() {
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={summary?.monthlyTotals || []}>
                             <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis 
-                              dataKey="monthName" 
+                            <XAxis
+                              dataKey="monthName"
                               interval={0}
                               angle={-45}
                               textAnchor="end"
                               height={80}
                             />
                             <YAxis />
-                            <Tooltip 
-                              formatter={(value: number) => [formatCurrency(value), 'Bills Paid']}
-                              labelFormatter={(label) => `${label} ${selectedYear}`}
+                            <Tooltip
+                              formatter={(value: number) => [
+                                formatCurrency(value),
+                                "Bills Paid",
+                              ]}
+                              labelFormatter={(label) =>
+                                `${label} ${selectedYear}`
+                              }
                             />
-                            <Bar dataKey="actual" fill="#10B981" name="Bills Paid" radius={[4, 4, 0, 0]} />
+                            <Bar
+                              dataKey="actual"
+                              fill="#10B981"
+                              name="Bills Paid"
+                              radius={[4, 4, 0, 0]}
+                            />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
@@ -728,39 +896,64 @@ export default function Bills() {
                           <tbody>
                             {summary?.monthlyTotals?.map((month, index) => {
                               const currentMonth = new Date().getMonth() + 1;
-                              const isCurrentMonth = month.month === currentMonth && selectedYear === new Date().getFullYear();
-                              const isPastMonth = selectedYear < new Date().getFullYear() || 
-                                                (selectedYear === new Date().getFullYear() && month.month < currentMonth);
-                              
+                              const isCurrentMonth =
+                                month.month === currentMonth &&
+                                selectedYear === new Date().getFullYear();
+                              const isPastMonth =
+                                selectedYear < new Date().getFullYear() ||
+                                (selectedYear === new Date().getFullYear() &&
+                                  month.month < currentMonth);
+
                               return (
-                                <tr key={index} className={`border-b ${isCurrentMonth ? 'bg-blue-50 dark:bg-blue-950' : ''}`}>
-                                  <td className="p-3 font-medium">{month.monthName}</td>
-                                  <td className={`p-3 text-right font-semibold ${
-                                    month.actual > 0 ? 'text-green-600' : 'text-muted-foreground'
-                                  }`}>
-                                    {month.actual > 0 ? formatCurrency(month.actual) : '-'}
+                                <tr
+                                  key={index}
+                                  className={`border-b ${
+                                    isCurrentMonth
+                                      ? "bg-blue-50 dark:bg-blue-950"
+                                      : ""
+                                  }`}
+                                >
+                                  <td className="p-3 font-medium">
+                                    {month.monthName}
+                                  </td>
+                                  <td
+                                    className={`p-3 text-right font-semibold ${
+                                      month.actual > 0
+                                        ? "text-green-600"
+                                        : "text-muted-foreground"
+                                    }`}
+                                  >
+                                    {month.actual > 0
+                                      ? formatCurrency(month.actual)
+                                      : "-"}
                                   </td>
                                   <td className="p-3 text-center">
-                                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                      isCurrentMonth ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
-                                      isPastMonth 
-                                        ? (month.actual > 0 
-                                          ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
-                                          : (month.projected > 0
-                                            ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
-                                            : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
-                                          )
-                                        )
-                                        : (month.projected > 0
-                                          ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                                          : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
-                                        )
-                                    }`}>
-                                      {isCurrentMonth ? 'This Month' : 
-                                       isPastMonth 
-                                        ? (month.actual > 0 ? 'Paid' : (month.projected > 0 ? 'Unpaid' : 'No Bills'))
-                                        : (month.projected > 0 ? 'Upcoming' : 'No Bills')
-                                      }
+                                    <span
+                                      className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                        isCurrentMonth
+                                          ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                                          : isPastMonth
+                                          ? month.actual > 0
+                                            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                                            : month.projected > 0
+                                            ? "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+                                            : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                                          : month.projected > 0
+                                          ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+                                          : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                                      }`}
+                                    >
+                                      {isCurrentMonth
+                                        ? "This Month"
+                                        : isPastMonth
+                                        ? month.actual > 0
+                                          ? "Paid"
+                                          : month.projected > 0
+                                          ? "Unpaid"
+                                          : "No Bills"
+                                        : month.projected > 0
+                                        ? "Upcoming"
+                                        : "No Bills"}
                                     </span>
                                   </td>
                                 </tr>
@@ -784,9 +977,16 @@ export default function Bills() {
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-muted-foreground">Annual Actual</p>
+                          <p className="text-sm font-medium text-muted-foreground">
+                            Annual Actual
+                          </p>
                           <p className="text-2xl font-bold">
-                            {formatCurrency(summary?.monthlyTotals?.reduce((sum, month) => sum + month.actual, 0) || 0)}
+                            {formatCurrency(
+                              summary?.monthlyTotals?.reduce(
+                                (sum, month) => sum + month.actual,
+                                0
+                              ) || 0
+                            )}
                           </p>
                         </div>
                         <TrendingUp className="h-8 w-8 text-blue-500" />
@@ -798,7 +998,9 @@ export default function Bills() {
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-muted-foreground">Actual Year-to-Date</p>
+                          <p className="text-sm font-medium text-muted-foreground">
+                            Actual Year-to-Date
+                          </p>
                           <p className="text-2xl font-bold">
                             {formatCurrency(getYTDActualTotal())}
                           </p>
@@ -812,25 +1014,34 @@ export default function Bills() {
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-muted-foreground">Average Monthly Spending</p>
+                          <p className="text-sm font-medium text-muted-foreground">
+                            Average Monthly Spending
+                          </p>
                           <p className="text-2xl font-bold">
                             {(() => {
-                              if (!summary?.monthlyTotals) return formatCurrency(0);
-                              
+                              if (!summary?.monthlyTotals)
+                                return formatCurrency(0);
+
                               const currentYear = new Date().getFullYear();
                               const currentMonth = new Date().getMonth();
-                              const isCurrentYear = selectedYear === currentYear;
-                              
+                              const isCurrentYear =
+                                selectedYear === currentYear;
+
                               // For current year, only count months that have passed (including current month)
                               // For past years, count all 12 months
-                              const monthsToCount = isCurrentYear ? currentMonth + 1 : 12;
-                              
+                              const monthsToCount = isCurrentYear
+                                ? currentMonth + 1
+                                : 12;
+
                               // Sum actual payments for the months we're considering
                               const totalActual = summary.monthlyTotals
                                 .slice(0, monthsToCount)
                                 .reduce((sum, month) => sum + month.actual, 0);
-                              
-                              const averageMonthly = monthsToCount > 0 ? totalActual / monthsToCount : 0;
+
+                              const averageMonthly =
+                                monthsToCount > 0
+                                  ? totalActual / monthsToCount
+                                  : 0;
                               return formatCurrency(averageMonthly);
                             })()}
                           </p>
@@ -852,24 +1063,51 @@ export default function Bills() {
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                       {[
-                        { name: 'Q1', months: [0, 1, 2], color: 'bg-blue-500' },
-                        { name: 'Q2', months: [3, 4, 5], color: 'bg-green-500' },
-                        { name: 'Q3', months: [6, 7, 8], color: 'bg-orange-500' },
-                        { name: 'Q4', months: [9, 10, 11], color: 'bg-purple-500' },
+                        { name: "Q1", months: [0, 1, 2], color: "bg-blue-500" },
+                        {
+                          name: "Q2",
+                          months: [3, 4, 5],
+                          color: "bg-green-500",
+                        },
+                        {
+                          name: "Q3",
+                          months: [6, 7, 8],
+                          color: "bg-orange-500",
+                        },
+                        {
+                          name: "Q4",
+                          months: [9, 10, 11],
+                          color: "bg-purple-500",
+                        },
                       ].map((quarter, index) => {
-                        const total = summary?.monthlyTotals
-                          ?.filter((_, monthIndex) => quarter.months.includes(monthIndex))
-                          .reduce((sum, month) => sum + month.actual, 0) || 0;
-                        
+                        const total =
+                          summary?.monthlyTotals
+                            ?.filter((_, monthIndex) =>
+                              quarter.months.includes(monthIndex)
+                            )
+                            .reduce((sum, month) => sum + month.actual, 0) || 0;
+
                         return (
                           <div key={index} className="p-4 border rounded-lg">
                             <div className="flex items-center justify-between mb-2">
                               <h3 className="font-medium">{quarter.name}</h3>
-                              <div className={`w-3 h-3 rounded-full ${quarter.color}`}></div>
+                              <div
+                                className={`w-3 h-3 rounded-full ${quarter.color}`}
+                              ></div>
                             </div>
-                            <p className="text-2xl font-bold text-green-600">{formatCurrency(total)}</p>
+                            <p className="text-2xl font-bold text-green-600">
+                              {formatCurrency(total)}
+                            </p>
                             <p className="text-sm text-muted-foreground">
-                              {total > 0 ? 'Bills Paid' : 'No payments'} • {quarter.months.map(m => summary?.monthlyTotals?.[m]?.monthName?.slice(0, 3) ?? '?').join(', ')}
+                              {total > 0 ? "Bills Paid" : "No payments"} •{" "}
+                              {quarter.months
+                                .map(
+                                  (m) =>
+                                    summary?.monthlyTotals?.[
+                                      m
+                                    ]?.monthName?.slice(0, 3) ?? "?"
+                                )
+                                .join(", ")}
                             </p>
                           </div>
                         );
@@ -889,9 +1127,12 @@ export default function Bills() {
                   <CardContent>
                     <div className="text-center py-12 text-muted-foreground">
                       <Clock className="mx-auto h-12 w-12 mb-4" />
-                      <p className="text-lg font-medium">Historical Data Coming Soon</p>
+                      <p className="text-lg font-medium">
+                        Historical Data Coming Soon
+                      </p>
                       <p className="text-sm">
-                        Year-over-year comparisons will appear here once you have multiple years of data.
+                        Year-over-year comparisons will appear here once you
+                        have multiple years of data.
                       </p>
                     </div>
                   </CardContent>
@@ -907,18 +1148,29 @@ export default function Bills() {
                   <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0 lg:space-x-4">
                     <div className="flex flex-col sm:flex-row sm:items-center space-y-4 sm:space-y-0 sm:space-x-4">
                       <div className="relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={16} />
-                        <Input 
-                          placeholder="Search bills..." 
+                        <Search
+                          className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground"
+                          size={16}
+                        />
+                        <Input
+                          placeholder="Search bills..."
                           className="pl-10 w-64"
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
                           data-testid="input-search-bills"
                         />
                       </div>
-                      
-                      <Select value={categoryFilter} onValueChange={(value) => setCategoryFilter(value === "all" ? "all" : value)}>
-                        <SelectTrigger className="w-40" data-testid="select-category-filter">
+
+                      <Select
+                        value={categoryFilter}
+                        onValueChange={(value) =>
+                          setCategoryFilter(value === "all" ? "all" : value)
+                        }
+                      >
+                        <SelectTrigger
+                          className="w-40"
+                          data-testid="select-category-filter"
+                        >
                           <SelectValue placeholder="All Categories" />
                         </SelectTrigger>
                         <SelectContent>
@@ -931,8 +1183,16 @@ export default function Bills() {
                         </SelectContent>
                       </Select>
 
-                      <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value === "all" ? "all" : value)}>
-                        <SelectTrigger className="w-32" data-testid="select-status-filter">
+                      <Select
+                        value={statusFilter}
+                        onValueChange={(value) =>
+                          setStatusFilter(value === "all" ? "all" : value)
+                        }
+                      >
+                        <SelectTrigger
+                          className="w-32"
+                          data-testid="select-status-filter"
+                        >
                           <SelectValue placeholder="All Status" />
                         </SelectTrigger>
                         <SelectContent>
@@ -957,14 +1217,20 @@ export default function Bills() {
                   {filteredBills.length === 0 ? (
                     <div className="text-center py-12 text-muted-foreground">
                       <PieChartIcon className="mx-auto h-12 w-12 mb-4" />
-                      <h3 className="text-lg font-semibold mb-2">No bills found</h3>
+                      <h3 className="text-lg font-semibold mb-2">
+                        No bills found
+                      </h3>
                       <p className="mb-4">
-                        {searchTerm || categoryFilter !== "all" || statusFilter !== "all"
-                          ? 'Try adjusting your filters to see more results.'
-                          : 'Start by adding your first bill.'
-                        }
+                        {searchTerm ||
+                        categoryFilter !== "all" ||
+                        statusFilter !== "all"
+                          ? "Try adjusting your filters to see more results."
+                          : "Start by adding your first bill."}
                       </p>
-                      <Button onClick={() => setIsAddModalOpen(true)} data-testid="button-add-first-bill">
+                      <Button
+                        onClick={() => setIsAddModalOpen(true)}
+                        data-testid="button-add-first-bill"
+                      >
                         Add Bill
                       </Button>
                     </div>
@@ -973,63 +1239,97 @@ export default function Bills() {
                       <table className="w-full">
                         <thead className="bg-muted/50">
                           <tr>
-                            <th className="text-left px-6 py-3 text-sm font-medium text-muted-foreground">Bill</th>
-                            <th className="text-left px-6 py-3 text-sm font-medium text-muted-foreground">Category</th>
-                            <th className="text-right px-6 py-3 text-sm font-medium text-muted-foreground">Amount</th>
-                            <th className="text-center px-6 py-3 text-sm font-medium text-muted-foreground">Frequency</th>
-                            <th className="text-center px-6 py-3 text-sm font-medium text-muted-foreground">Next Due</th>
-                            <th className="text-center px-6 py-3 text-sm font-medium text-muted-foreground">Status</th>
-                            <th className="text-right px-6 py-3 text-sm font-medium text-muted-foreground">Actions</th>
+                            <th className="text-left px-6 py-3 text-sm font-medium text-muted-foreground">
+                              Bill
+                            </th>
+                            <th className="text-left px-6 py-3 text-sm font-medium text-muted-foreground">
+                              Category
+                            </th>
+                            <th className="text-center px-6 py-3 text-sm font-medium text-muted-foreground">
+                              Frequency
+                            </th>
+                            <th className="text-center px-6 py-3 text-sm font-medium text-muted-foreground">
+                              Next Due
+                            </th>
+                            <th className="text-center px-6 py-3 text-sm font-medium text-muted-foreground">
+                              Status
+                            </th>
+                            <th className="text-right px-6 py-3 text-sm font-medium text-muted-foreground">
+                              Actions
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
                           {filteredBills.map((bill) => {
-                            const categoryName = billCategories?.find(c => c.id === bill.category)?.name || bill.category;
+                            const categoryName =
+                              billCategories?.find(
+                                (c) => c.id === bill.category
+                              )?.name || bill.category;
                             const IconComponent = getCategoryIcon(categoryName);
-                            
+
                             return (
-                              <tr key={bill.id} className="hover:bg-muted/30 transition-colors" data-testid={`row-bill-${bill.id}`}>
+                              <tr
+                                key={bill.id}
+                                className="hover:bg-muted/30 transition-colors"
+                                data-testid={`row-bill-${bill.id}`}
+                              >
                                 <td className="px-6 py-4">
                                   <div className="flex items-center space-x-3">
                                     <div className="w-10 h-10 bg-blue-500/10 rounded-lg flex items-center justify-center">
-                                      <IconComponent className="text-blue-500" size={20} />
+                                      <IconComponent
+                                        className="text-blue-500"
+                                        size={20}
+                                      />
                                     </div>
                                     <div>
-                                      <p className="font-medium text-foreground">{bill.name}</p>
+                                      <p className="font-medium text-foreground">
+                                        {bill.name}
+                                      </p>
                                       <p className="text-sm text-muted-foreground">
-                                        {bill.vendor || 'No vendor'}
+                                        {bill.vendor || "No vendor"}
                                       </p>
                                     </div>
                                   </div>
                                 </td>
                                 <td className="px-6 py-4">
                                   {(() => {
-                                    const categoryIndex = billCategories?.findIndex(c => c.id === bill.category) ?? 0;
-                                    const categoryLabel = billCategories?.find(c => c.id === bill.category)?.name || bill.category;
+                                    const categoryIndex =
+                                      billCategories?.findIndex(
+                                        (c) => c.id === bill.category
+                                      ) ?? 0;
+                                    const categoryLabel =
+                                      billCategories?.find(
+                                        (c) => c.id === bill.category
+                                      )?.name || bill.category;
                                     return (
-                                      <Badge className={getCategoryColor(categoryIndex)}>
+                                      <Badge
+                                        className={getCategoryColor(
+                                          categoryIndex
+                                        )}
+                                      >
                                         {categoryLabel}
                                       </Badge>
                                     );
                                   })()}
                                 </td>
-                                <td className="px-6 py-4 text-right text-foreground font-medium">
-                                  {formatCurrency(bill.amount)}
-                                </td>
                                 <td className="px-6 py-4 text-center text-sm text-muted-foreground">
-                                  {bill.frequency.replace('_', ' ')}
+                                  {bill.frequency.replace("_", " ")}
                                 </td>
                                 <td className="px-6 py-4 text-center text-sm text-muted-foreground">
                                   {getNextDueDate(bill)}
                                 </td>
                                 <td className="px-6 py-4 text-center">
-                                  <Badge variant={bill.isActive ? "default" : "secondary"}>
-                                    {bill.isActive ? 'Active' : 'Inactive'}
+                                  <Badge
+                                    variant={
+                                      bill.isActive ? "default" : "secondary"
+                                    }
+                                  >
+                                    {bill.isActive ? "Active" : "Inactive"}
                                   </Badge>
                                 </td>
                                 <td className="px-6 py-4 text-right">
                                   <div className="flex items-center justify-end space-x-2">
-                                    <Button 
+                                    <Button
                                       variant="ghost"
                                       size="sm"
                                       title="Record Payment"
@@ -1038,7 +1338,7 @@ export default function Bills() {
                                     >
                                       <CreditCard size={16} />
                                     </Button>
-                                    <Button 
+                                    <Button
                                       variant="ghost"
                                       size="sm"
                                       title="Edit"
@@ -1047,11 +1347,13 @@ export default function Bills() {
                                     >
                                       <Edit size={16} />
                                     </Button>
-                                    <Button 
+                                    <Button
                                       variant="ghost"
                                       size="sm"
                                       title="Delete"
-                                      onClick={() => handleDelete(bill.id, bill.name)}
+                                      onClick={() =>
+                                        handleDelete(bill.id, bill.name)
+                                      }
                                       disabled={deleteMutation.isPending}
                                       data-testid={`button-delete-${bill.id}`}
                                     >
@@ -1072,161 +1374,269 @@ export default function Bills() {
 
             {/* Insights Tab */}
             <TabsContent value="insights">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Category Breakdown Chart */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <PieChartIcon className="mr-2" size={20} />
-                      Category Breakdown
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-80">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={getCategoryChartData()}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={60}
-                            outerRadius={120}
-                            paddingAngle={2}
-                            dataKey="value"
-                          >
-                            {getCategoryChartData().map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.color} />
-                            ))}
-                          </Pie>
-                          <Tooltip formatter={(value: number) => [formatCurrency(value), 'Monthly Amount']} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <div className="mt-4 space-y-2">
-                      {getCategoryChartData().map((item, index) => (
-                        <div key={item.name} className="flex items-center justify-between">
-                          <div className="flex items-center">
-                            <div 
-                              className="w-3 h-3 rounded-full mr-2" 
-                              style={{ backgroundColor: item.color }}
-                            ></div>
-                            <span className="text-sm text-foreground">{item.name}</span>
-                          </div>
-                          <span className="text-sm font-medium text-foreground">
-                            {formatCurrency(item.value)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <PieChartIcon className="mr-2" size={20} />
+                    Category Breakdown
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {(() => {
+                    const chartData = getCategoryChartData();
+                    const total = chartData.reduce(
+                      (sum, item) => sum + item.value,
+                      0
+                    );
 
-                {/* Frequency Analysis */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <BarChart3 className="mr-2" size={20} />
-                      Frequency Analysis
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-                        <div>
-                          <p className="text-sm font-medium">Monthly Bills</p>
-                          <p className="text-2xl font-bold text-foreground">
-                            {formatCurrency(summary?.totalMonthlyBills || 0)}
+                    if (chartData.length === 0 || total === 0) {
+                      return (
+                        <div className="flex flex-col items-center justify-center py-16 text-center">
+                          <PieChartIcon className="h-16 w-16 text-muted-foreground/50 mb-4" />
+                          <h3 className="text-lg font-medium text-foreground mb-2">
+                            No Bill Data Available
+                          </h3>
+                          <p className="text-sm text-muted-foreground max-w-md">
+                            Add bills to see your spending breakdown by category
                           </p>
                         </div>
-                        <Calendar className="text-blue-500" size={24} />
-                      </div>
-                      
-                      <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-                        <div>
-                          <p className="text-sm font-medium">Quarterly Bills</p>
-                          <p className="text-2xl font-bold text-foreground">
-                            {formatCurrency(summary?.totalQuarterlyBills || 0)}
-                          </p>
+                      );
+                    }
+
+                    return (
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <div className="h-80 flex items-center justify-center">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={chartData}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={120}
+                                paddingAngle={2}
+                                dataKey="value"
+                                label={(entry) => {
+                                  const percentage = Math.round(
+                                    (entry.value / total) * 100
+                                  );
+                                  return percentage > 5 ? `${percentage}%` : "";
+                                }}
+                              >
+                                {chartData.map((entry, index) => (
+                                  <Cell
+                                    key={`cell-${index}`}
+                                    fill={entry.color}
+                                  />
+                                ))}
+                              </Pie>
+                              <Tooltip
+                                formatter={(value: number) => [
+                                  formatCurrency(value),
+                                  "Monthly Amount",
+                                ]}
+                              />
+                            </PieChart>
+                          </ResponsiveContainer>
                         </div>
-                        <Calendar className="text-green-500" size={24} />
-                      </div>
-                      
-                      <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-                        <div>
-                          <p className="text-sm font-medium">Yearly Bills</p>
-                          <p className="text-2xl font-bold text-foreground">
-                            {formatCurrency(summary?.totalYearlyBills || 0)}
-                          </p>
+                        <div className="space-y-3">
+                          <h4 className="font-medium text-sm text-muted-foreground mb-4">
+                            Category Details
+                          </h4>
+                          <div className="max-h-80 overflow-y-auto space-y-3">
+                            {chartData.map((item) => {
+                              const percentage =
+                                total > 0
+                                  ? Math.round((item.value / total) * 100)
+                                  : 0;
+                              return (
+                                <div
+                                  key={item.name}
+                                  className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
+                                >
+                                  <div className="flex items-center">
+                                    <div
+                                      className="w-4 h-4 rounded-full mr-3 flex-shrink-0"
+                                      style={{ backgroundColor: item.color }}
+                                    ></div>
+                                    <div>
+                                      <p className="text-sm font-medium text-foreground">
+                                        {item.name}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {item.count}{" "}
+                                        {item.count === 1 ? "bill" : "bills"}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-sm font-bold text-foreground">
+                                      {formatCurrency(item.value)}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {percentage}%
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
-                        <Calendar className="text-purple-500" size={24} />
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
             </TabsContent>
 
             {/* Comparison Tab */}
             <TabsContent value="comparison">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Monthly vs Annual Comparison */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Bills by Frequency */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <TrendingUp className="mr-2" size={20} />
-                      Monthly vs Annual View
+                    <CardTitle className="flex items-center text-base">
+                      <Calendar className="mr-2" size={18} />
+                      Bills by Frequency
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-6">
-                      <div className="text-center">
-                        <p className="text-sm text-muted-foreground mb-2">Monthly Equivalent</p>
-                        <p className="text-3xl font-bold text-foreground">
-                          {formatCurrency(summary?.monthlyEquivalent || 0)}
-                        </p>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
+                        <div>
+                          <p className="text-xs text-muted-foreground">
+                            Monthly
+                          </p>
+                          <p className="text-lg font-bold text-foreground">
+                            {bills?.filter(
+                              (b) => b.frequency === "monthly" && b.isActive
+                            ).length || 0}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-medium text-foreground">
+                            {formatCurrency(summary?.totalMonthlyBills || 0)}
+                          </p>
+                        </div>
                       </div>
-                      
-                      <div className="text-center">
-                        <p className="text-sm text-muted-foreground mb-2">Annual Projection</p>
-                        <p className="text-3xl font-bold text-foreground">
-                          {formatCurrency(getAnnualProjectedTotal())}
-                        </p>
+
+                      <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-950/30 rounded-lg">
+                        <div>
+                          <p className="text-xs text-muted-foreground">
+                            Quarterly
+                          </p>
+                          <p className="text-lg font-bold text-foreground">
+                            {bills?.filter(
+                              (b) => b.frequency === "quarterly" && b.isActive
+                            ).length || 0}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-medium text-foreground">
+                            {formatCurrency(summary?.totalQuarterlyBills || 0)}
+                          </p>
+                        </div>
                       </div>
-                      
-                      <div className="text-center">
-                        <p className="text-sm text-muted-foreground mb-2">Actual Year-to-Date</p>
-                        <p className="text-3xl font-bold text-foreground">
-                          {formatCurrency(getAnnualActualTotal())}
+
+                      <div className="flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-950/30 rounded-lg">
+                        <div>
+                          <p className="text-xs text-muted-foreground">
+                            Yearly
+                          </p>
+                          <p className="text-lg font-bold text-foreground">
+                            {bills?.filter(
+                              (b) => b.frequency === "yearly" && b.isActive
+                            ).length || 0}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-medium text-foreground">
+                            {formatCurrency(summary?.totalYearlyBills || 0)}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-950/30 rounded-lg">
+                        <div>
+                          <p className="text-xs text-muted-foreground">
+                            One-time
+                          </p>
+                          <p className="text-lg font-bold text-foreground">
+                            {bills?.filter(
+                              (b) => b.frequency === "one_time" && b.isActive
+                            ).length || 0}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-medium text-foreground">
+                            {formatCurrency(
+                              bills
+                                ?.filter(
+                                  (b) =>
+                                    b.frequency === "one_time" && b.isActive
+                                )
+                                .reduce(
+                                  (sum, b) => sum + parseFloat(b.amount),
+                                  0
+                                ) || 0
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Bills by Status */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center text-base">
+                      <Receipt className="mr-2" size={18} />
+                      Bills by Status
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-950/30 rounded-lg">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">
+                              Active Bills
+                            </p>
+                            <p className="text-lg font-bold text-foreground">
+                              {summary?.activeBillsCount || 0}
+                            </p>
+                          </div>
+                        </div>
+                        <p className="text-sm font-medium text-foreground">
+                          {formatCurrency(summary?.monthlyEquivalent || 0)}/mo
                         </p>
                       </div>
 
-                      <div className="border-t pt-4">
-                        <p className="text-sm text-muted-foreground mb-4">Bill Distribution</p>
-                        <div className="space-y-2">
-                          <div className="flex justify-between">
-                            <span className="text-sm">Monthly</span>
-                            <span className="text-sm font-medium">
-                              {bills?.filter(b => b.frequency === 'monthly' && b.isActive).length || 0} bills
-                            </span>
+                      <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-950/30 rounded-lg">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">
+                              Inactive Bills
+                            </p>
+                            <p className="text-lg font-bold text-foreground">
+                              {(bills?.length || 0) -
+                                (summary?.activeBillsCount || 0)}
+                            </p>
                           </div>
-                          <div className="flex justify-between">
-                            <span className="text-sm">Quarterly</span>
-                            <span className="text-sm font-medium">
-                              {bills?.filter(b => b.frequency === 'quarterly' && b.isActive).length || 0} bills
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-sm">Yearly</span>
-                            <span className="text-sm font-medium">
-                              {bills?.filter(b => b.frequency === 'yearly' && b.isActive).length || 0} bills
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-sm">One-time</span>
-                            <span className="text-sm font-medium">
-                              {bills?.filter(b => b.frequency === 'one_time' && b.isActive).length || 0} bills
-                            </span>
-                          </div>
+                        </div>
+                      </div>
+
+                      <div className="border-t pt-3 mt-3">
+                        <div className="text-center">
+                          <p className="text-xs text-muted-foreground mb-1">
+                            Total Bills
+                          </p>
+                          <p className="text-2xl font-bold text-foreground">
+                            {bills?.length || 0}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -1236,44 +1646,67 @@ export default function Bills() {
                 {/* Upcoming Bills */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <Clock className="mr-2" size={20} />
-                      Upcoming Bills
+                    <CardTitle className="flex items-center text-base">
+                      <Clock className="mr-2" size={18} />
+                      Upcoming This Week
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
-                      {bills?.filter(bill => {
-                        if (!bill.isActive || !bill.dueDay || bill.frequency === 'one_time') return false;
-                        const today = new Date();
-                        const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
-                        const dueDate = new Date(today.getFullYear(), today.getMonth(), bill.dueDay);
-                        if (dueDate < today) {
-                          dueDate.setMonth(dueDate.getMonth() + 1);
-                        }
-                        return dueDate <= nextWeek;
-                      }).slice(0, 5).map((bill) => (
-                        <div key={bill.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-orange-500/10 rounded-lg flex items-center justify-center">
-                              <AlertCircle className="text-orange-500" size={16} />
+                    <div className="space-y-3 max-h-80 overflow-y-auto">
+                      {(() => {
+                        const upcomingBills = bills?.filter((bill) => {
+                          if (
+                            !bill.isActive ||
+                            !bill.dueDay ||
+                            bill.frequency === "one_time"
+                          )
+                            return false;
+                          const today = new Date();
+                          const nextWeek = new Date(
+                            today.getTime() + 7 * 24 * 60 * 60 * 1000
+                          );
+                          const dueDate = new Date(
+                            today.getFullYear(),
+                            today.getMonth(),
+                            bill.dueDay
+                          );
+                          if (dueDate < today) {
+                            dueDate.setMonth(dueDate.getMonth() + 1);
+                          }
+                          return dueDate <= nextWeek;
+                        });
+
+                        if (!upcomingBills || upcomingBills.length === 0) {
+                          return (
+                            <div className="text-center py-8 text-muted-foreground">
+                              <Clock className="mx-auto h-8 w-8 mb-2 opacity-50" />
+                              <p className="text-sm">No bills due this week</p>
                             </div>
+                          );
+                        }
+
+                        return upcomingBills.map((bill) => (
+                          <div
+                            key={bill.id}
+                            className="flex items-center justify-between p-3 bg-orange-50 dark:bg-orange-950/30 rounded-lg"
+                          >
                             <div>
                               <p className="font-medium text-sm">{bill.name}</p>
-                              <p className="text-xs text-muted-foreground">{bill.vendor || 'No vendor'}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {bill.vendor || "No vendor"}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-medium text-sm">
+                                {formatCurrency(bill.amount)}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {getNextDueDate(bill)}
+                              </p>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <p className="font-medium text-sm">{formatCurrency(bill.amount)}</p>
-                            <p className="text-xs text-muted-foreground">{getNextDueDate(bill)}</p>
-                          </div>
-                        </div>
-                      )) || (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <Clock className="mx-auto h-8 w-8 mb-2" />
-                          <p className="text-sm">No bills due this week</p>
-                        </div>
-                      )}
+                        ));
+                      })()}
                     </div>
                   </CardContent>
                 </Card>
@@ -1284,25 +1717,38 @@ export default function Bills() {
       </main>
 
       {/* Payment Management Modal */}
-      <Dialog open={isRecordPaymentModalOpen} onOpenChange={handleClosePaymentModal}>
+      <Dialog
+        open={isRecordPaymentModalOpen}
+        onOpenChange={handleClosePaymentModal}
+      >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Manage Payments - {selectedBillForPayment?.name}</DialogTitle>
+            <DialogTitle>
+              Manage Payments - {selectedBillForPayment?.name}
+            </DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-6">
             {/* Existing Payments */}
             {selectedBillPayments.length > 0 && (
               <div>
                 <h3 className="text-lg font-medium mb-3">Payment History</h3>
-                <div className="space-y-3">
+                <div className="space-y-3 max-h-80 overflow-y-auto">
                   {selectedBillPayments.map((payment) => (
-                    <div key={payment.id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div
+                      key={payment.id}
+                      className="flex items-center justify-between p-3 border rounded-lg"
+                    >
                       <div className="flex items-center space-x-3">
                         <div>
-                          <p className="font-medium">{formatCurrency(payment.amount)}</p>
+                          <p className="font-medium">
+                            {formatCurrency(payment.amount)}
+                          </p>
                           <p className="text-sm text-muted-foreground">
-                            Paid: {new Date(payment.paidDate).toLocaleDateString()} | Due: {new Date(payment.dueDate).toLocaleDateString()}
+                            Paid:{" "}
+                            {new Date(payment.paidDate).toLocaleDateString()} |
+                            Due:{" "}
+                            {new Date(payment.dueDate).toLocaleDateString()}
                           </p>
                         </div>
                       </div>
@@ -1311,47 +1757,51 @@ export default function Bills() {
                           {getStatusLabel(payment.status)}
                         </Badge>
                         <div className="flex space-x-1">
-                          {payment.status !== 'paid' && (
-                            <Button 
-                              size="sm" 
+                          {payment.status !== "paid" && (
+                            <Button
+                              size="sm"
                               variant="outline"
-                              onClick={() => updatePaymentMutation.mutate({
-                                id: payment.id, 
-                                amount: parseFloat(payment.amount),
-                                paidDate: payment.paidDate,
-                                dueDate: payment.dueDate,
-                                status: 'paid'
-                              })}
+                              onClick={() =>
+                                updatePaymentMutation.mutate({
+                                  id: payment.id,
+                                  amount: parseFloat(payment.amount),
+                                  paidDate: payment.paidDate,
+                                  dueDate: payment.dueDate,
+                                  status: "paid",
+                                })
+                              }
                               disabled={updatePaymentMutation.isPending}
                             >
                               Mark Paid
                             </Button>
                           )}
-                          {payment.status !== 'cancelled' && (
-                            <Button 
-                              size="sm" 
+                          {payment.status !== "cancelled" && (
+                            <Button
+                              size="sm"
                               variant="outline"
-                              onClick={() => updatePaymentMutation.mutate({
-                                id: payment.id, 
-                                amount: parseFloat(payment.amount),
-                                paidDate: payment.paidDate,
-                                dueDate: payment.dueDate,
-                                status: 'cancelled'
-                              })}
+                              onClick={() =>
+                                updatePaymentMutation.mutate({
+                                  id: payment.id,
+                                  amount: parseFloat(payment.amount),
+                                  paidDate: payment.paidDate,
+                                  dueDate: payment.dueDate,
+                                  status: "cancelled",
+                                })
+                              }
                               disabled={updatePaymentMutation.isPending}
                             >
                               Cancel
                             </Button>
                           )}
-                          <Button 
-                            size="sm" 
+                          <Button
+                            size="sm"
                             variant="ghost"
                             onClick={() => handleEditPayment(payment)}
                           >
                             <Edit size={14} />
                           </Button>
-                          <Button 
-                            size="sm" 
+                          <Button
+                            size="sm"
                             variant="ghost"
                             onClick={() => handleDeletePayment(payment.id)}
                             disabled={deletePaymentMutation.isPending}
@@ -1367,13 +1817,20 @@ export default function Bills() {
             )}
 
             {/* Add New Payment Form */}
-            {(editingPayment !== null || selectedBillPayments.length === 0 || showNewPaymentForm) && (
+            {(editingPayment !== null ||
+              selectedBillPayments.length === 0 ||
+              showNewPaymentForm) && (
               <div>
                 <h3 className="text-lg font-medium mb-3">
-                  {editingPayment ? 'Edit Payment' : 'Add New Payment'}
+                  {editingPayment ? "Edit Payment" : "Add New Payment"}
                 </h3>
                 <Form {...paymentForm}>
-                  <form onSubmit={paymentForm.handleSubmit(handleRecordPaymentSubmit)} className="space-y-4">
+                  <form
+                    onSubmit={paymentForm.handleSubmit(
+                      handleRecordPaymentSubmit
+                    )}
+                    className="space-y-4"
+                  >
                     <div className="grid grid-cols-2 gap-4">
                       <FormField
                         control={paymentForm.control}
@@ -1382,12 +1839,12 @@ export default function Bills() {
                           <FormItem>
                             <FormLabel>Amount</FormLabel>
                             <FormControl>
-                              <Input 
-                                type="number" 
-                                step="0.01" 
-                                placeholder="0.00" 
+                              <Input
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
                                 {...field}
-                                data-testid="input-amount" 
+                                data-testid="input-amount"
                               />
                             </FormControl>
                             <FormMessage />
@@ -1401,7 +1858,10 @@ export default function Bills() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Status</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value}
+                            >
                               <FormControl>
                                 <SelectTrigger data-testid="select-status">
                                   <SelectValue />
@@ -1410,7 +1870,9 @@ export default function Bills() {
                               <SelectContent>
                                 <SelectItem value="paid">Paid</SelectItem>
                                 <SelectItem value="overdue">Overdue</SelectItem>
-                                <SelectItem value="cancelled">Cancelled</SelectItem>
+                                <SelectItem value="cancelled">
+                                  Cancelled
+                                </SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -1427,10 +1889,10 @@ export default function Bills() {
                           <FormItem>
                             <FormLabel>Paid Date</FormLabel>
                             <FormControl>
-                              <Input 
-                                type="date" 
+                              <Input
+                                type="date"
                                 {...field}
-                                data-testid="input-paid-date" 
+                                data-testid="input-paid-date"
                               />
                             </FormControl>
                             <FormMessage />
@@ -1445,10 +1907,10 @@ export default function Bills() {
                           <FormItem>
                             <FormLabel>Due Date</FormLabel>
                             <FormControl>
-                              <Input 
-                                type="date" 
+                              <Input
+                                type="date"
                                 {...field}
-                                data-testid="input-due-date" 
+                                data-testid="input-due-date"
                               />
                             </FormControl>
                             <FormMessage />
@@ -1459,17 +1921,19 @@ export default function Bills() {
 
                     <div className="flex justify-end space-x-2 pt-4">
                       {editingPayment && (
-                        <Button 
-                          type="button" 
-                          variant="outline" 
+                        <Button
+                          type="button"
+                          variant="outline"
                           onClick={() => {
                             setEditingPayment(null);
                             setShowNewPaymentForm(false);
                             paymentForm.reset({
-                              amount: selectedBillForPayment ? parseFloat(selectedBillForPayment.amount) : 0,
+                              amount: selectedBillForPayment
+                                ? parseFloat(selectedBillForPayment.amount)
+                                : 0,
                               billId: selectedBillForPayment?.id || "",
-                              paidDate: new Date().toISOString().split('T')[0],
-                              dueDate: new Date().toISOString().split('T')[0],
+                              paidDate: new Date().toISOString().split("T")[0],
+                              dueDate: new Date().toISOString().split("T")[0],
                               status: "paid",
                             });
                           }}
@@ -1477,11 +1941,20 @@ export default function Bills() {
                           Cancel Edit
                         </Button>
                       )}
-                      <Button type="submit" disabled={recordPaymentMutation.isPending || updatePaymentMutation.isPending}>
-                        {editingPayment 
-                          ? (updatePaymentMutation.isPending ? "Updating..." : "Update Payment")
-                          : (recordPaymentMutation.isPending ? "Adding..." : "Add Payment")
+                      <Button
+                        type="submit"
+                        disabled={
+                          recordPaymentMutation.isPending ||
+                          updatePaymentMutation.isPending
                         }
+                      >
+                        {editingPayment
+                          ? updatePaymentMutation.isPending
+                            ? "Updating..."
+                            : "Update Payment"
+                          : recordPaymentMutation.isPending
+                          ? "Adding..."
+                          : "Add Payment"}
                       </Button>
                     </div>
                   </form>
@@ -1490,33 +1963,37 @@ export default function Bills() {
             )}
 
             {/* Quick Actions */}
-            {selectedBillPayments.length > 0 && !editingPayment && !showNewPaymentForm && (
-              <div className="border-t pt-4">
-                <div className="flex justify-between items-center">
-                  <Button 
-                    variant="outline" 
-                    onClick={() => {
-                      // Clear editing state and show new payment form
-                      setEditingPayment(null);
-                      setShowNewPaymentForm(true);
-                      paymentForm.reset({
-                        amount: selectedBillForPayment ? parseFloat(selectedBillForPayment.amount) : 0,
-                        billId: selectedBillForPayment?.id || "",
-                        paidDate: new Date().toISOString().split('T')[0],
-                        dueDate: new Date().toISOString().split('T')[0],
-                        status: "paid",
-                      });
-                    }}
-                  >
-                    <Plus size={16} className="mr-2" />
-                    Add New Payment
-                  </Button>
-                  <Button variant="outline" onClick={handleClosePaymentModal}>
-                    Close
-                  </Button>
+            {selectedBillPayments.length > 0 &&
+              !editingPayment &&
+              !showNewPaymentForm && (
+                <div className="border-t pt-4">
+                  <div className="flex justify-between items-center">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        // Clear editing state and show new payment form
+                        setEditingPayment(null);
+                        setShowNewPaymentForm(true);
+                        paymentForm.reset({
+                          amount: selectedBillForPayment
+                            ? parseFloat(selectedBillForPayment.amount)
+                            : 0,
+                          billId: selectedBillForPayment?.id || "",
+                          paidDate: new Date().toISOString().split("T")[0],
+                          dueDate: new Date().toISOString().split("T")[0],
+                          status: "paid",
+                        });
+                      }}
+                    >
+                      <Plus size={16} className="mr-2" />
+                      Add New Payment
+                    </Button>
+                    <Button variant="outline" onClick={handleClosePaymentModal}>
+                      Close
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
             {/* Close button for new payments */}
             {selectedBillPayments.length === 0 && !editingPayment && (
@@ -1535,10 +2012,10 @@ export default function Bills() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {editingBill ? 'Edit Bill' : 'Add New Bill'}
+              {editingBill ? "Edit Bill" : "Add New Bill"}
             </DialogTitle>
           </DialogHeader>
-          
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1549,7 +2026,11 @@ export default function Bills() {
                     <FormItem>
                       <FormLabel>Bill Name</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g., Electricity Bill" {...field} data-testid="input-bill-name" />
+                        <Input
+                          placeholder="e.g., Electricity Bill"
+                          {...field}
+                          data-testid="input-bill-name"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -1563,7 +2044,12 @@ export default function Bills() {
                     <FormItem>
                       <FormLabel>Vendor/Provider</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g., BSES" {...field} value={field.value || ""} data-testid="input-bill-vendor" />
+                        <Input
+                          placeholder="e.g., BSES"
+                          {...field}
+                          value={field.value || ""}
+                          data-testid="input-bill-vendor"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -1578,7 +2064,10 @@ export default function Bills() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Category</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger data-testid="select-bill-category">
                             <SelectValue placeholder="Select category" />
@@ -1604,12 +2093,12 @@ export default function Bills() {
                     <FormItem>
                       <FormLabel>Amount (₹)</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="number" 
-                          step="0.01" 
-                          placeholder="0.00" 
-                          {...field} 
-                          data-testid="input-bill-amount" 
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          {...field}
+                          data-testid="input-bill-amount"
                         />
                       </FormControl>
                       <FormMessage />
@@ -1625,7 +2114,10 @@ export default function Bills() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Frequency</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger data-testid="select-bill-frequency">
                             <SelectValue />
@@ -1634,7 +2126,9 @@ export default function Bills() {
                         <SelectContent>
                           <SelectItem value="monthly">Monthly</SelectItem>
                           <SelectItem value="quarterly">Quarterly</SelectItem>
-                          <SelectItem value="half_yearly">Half Yearly</SelectItem>
+                          <SelectItem value="half_yearly">
+                            Half Yearly
+                          </SelectItem>
                           <SelectItem value="yearly">Yearly</SelectItem>
                           <SelectItem value="one_time">One Time</SelectItem>
                         </SelectContent>
@@ -1652,14 +2146,20 @@ export default function Bills() {
                       <FormItem>
                         <FormLabel>Due Day (1-31)</FormLabel>
                         <FormControl>
-                          <Input 
-                            type="number" 
-                            min="1" 
-                            max="31" 
-                            placeholder="15" 
-                            {...field} 
-                            onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
-                            data-testid="input-bill-due-day" 
+                          <Input
+                            type="number"
+                            min="1"
+                            max="31"
+                            placeholder="15"
+                            {...field}
+                            onChange={(e) =>
+                              field.onChange(
+                                e.target.value
+                                  ? parseInt(e.target.value)
+                                  : undefined
+                              )
+                            }
+                            data-testid="input-bill-due-day"
                           />
                         </FormControl>
                         <FormMessage />
@@ -1676,11 +2176,11 @@ export default function Bills() {
                   <FormItem>
                     <FormLabel>Description (Optional)</FormLabel>
                     <FormControl>
-                      <Textarea 
-                        placeholder="Additional notes about this bill..." 
-                        {...field} 
+                      <Textarea
+                        placeholder="Additional notes about this bill..."
+                        {...field}
                         value={field.value || ""}
-                        data-testid="textarea-bill-description" 
+                        data-testid="textarea-bill-description"
                       />
                     </FormControl>
                     <FormMessage />
@@ -1718,14 +2218,18 @@ export default function Bills() {
                     <FormItem>
                       <FormLabel>Reminder Days Before</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="number" 
-                          min="0" 
-                          max="30" 
-                          placeholder="3" 
-                          {...field} 
-                          onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : 3)}
-                          data-testid="input-bill-reminder-days" 
+                        <Input
+                          type="number"
+                          min="0"
+                          max="30"
+                          placeholder="3"
+                          {...field}
+                          onChange={(e) =>
+                            field.onChange(
+                              e.target.value ? parseInt(e.target.value) : 3
+                            )
+                          }
+                          data-testid="input-bill-reminder-days"
                         />
                       </FormControl>
                       <FormMessage />
@@ -1735,20 +2239,22 @@ export default function Bills() {
               </div>
 
               <div className="flex justify-end space-x-4">
-                <Button 
-                  type="button" 
-                  variant="outline" 
+                <Button
+                  type="button"
+                  variant="outline"
                   onClick={handleCloseModal}
                   data-testid="button-cancel-bill"
                 >
                   Cancel
                 </Button>
-                <Button 
-                  type="submit" 
-                  disabled={createMutation.isPending || updateMutation.isPending}
+                <Button
+                  type="submit"
+                  disabled={
+                    createMutation.isPending || updateMutation.isPending
+                  }
                   data-testid="button-save-bill"
                 >
-                  {editingBill ? 'Update Bill' : 'Add Bill'}
+                  {editingBill ? "Update Bill" : "Add Bill"}
                 </Button>
               </div>
             </form>
