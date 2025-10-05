@@ -1,7 +1,17 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { initializeStorage, setStorage, IStorage } from "./storage";
-import { insertInvestmentSchema, insertTransactionSchema, insertBillSchema, insertBillPaymentSchema, insertInvestmentTypeSchema, insertBillCategorySchema, updateUserProfileSchema, Transaction, Investment } from "@shared/schema";
+import {
+  insertInvestmentSchema,
+  insertTransactionSchema,
+  insertBillSchema,
+  insertBillPaymentSchema,
+  insertInvestmentTypeSchema,
+  insertBillCategorySchema,
+  updateUserProfileSchema,
+  Transaction,
+  Investment,
+} from "@shared/schema";
 import { z } from "zod";
 import { setupAuth } from "./auth";
 
@@ -20,11 +30,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize storage (MongoDB or fallback to memory)
   appStorage = await initializeStorage();
   setStorage(appStorage);
-  
+
   // Reference integration: blueprint:javascript_auth_all_persistance
   // Setup authentication routes: /api/register, /api/login, /api/logout, /api/user
   setupAuth(app);
-  
+
   // Profile management endpoints
   app.get("/api/profile", requireAuth, async (req: any, res) => {
     try {
@@ -45,31 +55,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.id;
       const validatedData = updateUserProfileSchema.parse(req.body);
-      
+
       // Check if username is being changed and if it's already taken
       if (validatedData.username) {
-        const existingUser = await appStorage.getUserByUsername(validatedData.username);
+        const existingUser = await appStorage.getUserByUsername(
+          validatedData.username
+        );
         if (existingUser && existingUser.id !== userId) {
           return res.status(400).json({ error: "Username already taken" });
         }
       }
-      
-      const updatedUser = await appStorage.updateUserProfile(userId, validatedData);
+
+      const updatedUser = await appStorage.updateUserProfile(
+        userId,
+        validatedData
+      );
       if (!updatedUser) {
         return res.status(404).json({ error: "User not found" });
       }
-      
+
       // Return updated profile without password
       const { password, ...profile } = updatedUser;
       res.json(profile);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid data", details: error.errors });
+        return res
+          .status(400)
+          .json({ error: "Invalid data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to update profile" });
     }
   });
-  
+
   // Get all investments
   app.get("/api/investments", requireAuth, async (req: any, res) => {
     try {
@@ -99,8 +116,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertInvestmentSchema.parse(req.body);
       const userId = req.user.id;
-      const investment = await appStorage.createInvestment(userId, validatedData);
-      
+      const investment = await appStorage.createInvestment(
+        userId,
+        validatedData
+      );
+
       // Auto-create initial transaction if principal amount > 0
       const principalAmount = parseFloat(validatedData.principalAmount);
       if (principalAmount > 0) {
@@ -108,24 +128,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
           investmentId: investment.id,
           amount: principalAmount,
           transactionDate: validatedData.startDate,
-          notes: "Initial investment amount"
+          notes: "Initial investment amount",
         };
-        
+
         try {
           // Validate transaction data through schema to ensure consistency
-          const validatedTransaction = insertTransactionSchema.parse(initialTransactionData);
+          const validatedTransaction = insertTransactionSchema.parse(
+            initialTransactionData
+          );
           await appStorage.createTransaction(validatedTransaction);
         } catch (transactionError) {
-          console.error("Failed to create initial transaction:", transactionError);
+          console.error(
+            "Failed to create initial transaction:",
+            transactionError
+          );
           // Continue without failing the investment creation to maintain backwards compatibility
           // The investment exists but initial transaction is missing - user can manually add it
         }
       }
-      
+
       res.status(201).json(investment);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid data", details: error.errors });
+        return res
+          .status(400)
+          .json({ error: "Invalid data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to create investment" });
     }
@@ -135,14 +162,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/investments/:id", requireAuth, async (req: any, res) => {
     try {
       const validatedData = insertInvestmentSchema.partial().parse(req.body);
-      const investment = await appStorage.updateInvestment(req.params.id, validatedData);
+      const investment = await appStorage.updateInvestment(
+        req.params.id,
+        validatedData
+      );
       if (!investment) {
         return res.status(404).json({ error: "Investment not found" });
       }
       res.json(investment);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid data", details: error.errors });
+        return res
+          .status(400)
+          .json({ error: "Invalid data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to update investment" });
     }
@@ -162,14 +194,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get transactions for an investment
-  app.get("/api/investments/:id/transactions", requireAuth, async (req: any, res) => {
-    try {
-      const transactions = await appStorage.getTransactions(req.params.id);
-      res.json(transactions);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch transactions" });
+  app.get(
+    "/api/investments/:id/transactions",
+    requireAuth,
+    async (req: any, res) => {
+      try {
+        const transactions = await appStorage.getTransactions(req.params.id);
+        res.json(transactions);
+      } catch (error) {
+        res.status(500).json({ error: "Failed to fetch transactions" });
+      }
     }
-  });
+  );
 
   // Create transaction
   app.post("/api/transactions", requireAuth, async (req: any, res) => {
@@ -179,97 +215,148 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(transaction);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid data", details: error.errors });
+        return res
+          .status(400)
+          .json({ error: "Invalid data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to create transaction" });
     }
   });
 
   // Record payment (create transaction and update principal amount)
-  app.post("/api/transactions/record-payment", requireAuth, async (req: any, res) => {
-    try {
-      console.log('Record payment request body:', req.body);
-      console.log('User ID:', req.user.id);
-      
-      const validatedData = insertTransactionSchema.parse(req.body);
-      console.log('Validated data:', validatedData);
-      
-      // Additional server-side validation for positive amounts
-      if (validatedData.amount <= 0) {
-        return res.status(400).json({ error: "Payment amount must be positive" });
+  app.post(
+    "/api/transactions/record-payment",
+    requireAuth,
+    async (req: any, res) => {
+      try {
+        console.log("Record payment request body:", req.body);
+        console.log("User ID:", req.user.id);
+
+        const validatedData = insertTransactionSchema.parse(req.body);
+        console.log("Validated data:", validatedData);
+
+        // Additional server-side validation for positive amounts
+        if (validatedData.amount <= 0) {
+          return res
+            .status(400)
+            .json({ error: "Payment amount must be positive" });
+        }
+
+        // Verify the investment belongs to the authenticated user
+        const investment = await appStorage.getInvestment(
+          validatedData.investmentId
+        );
+        console.log(
+          "Found investment:",
+          investment?.id,
+          "User:",
+          investment?.userId
+        );
+        if (!investment) {
+          return res.status(404).json({ error: "Investment not found" });
+        }
+
+        if (investment.userId !== req.user.id) {
+          console.log(
+            "Access denied: Investment userId",
+            investment.userId,
+            "vs User ID",
+            req.user.id
+          );
+          return res
+            .status(403)
+            .json({
+              error:
+                "Access denied: You can only record payments for your own investments",
+            });
+        }
+
+        console.log("Creating transaction...");
+        const result = await appStorage.createTransactionAndUpdatePrincipal(
+          validatedData
+        );
+        console.log(
+          "Transaction result:",
+          result.transaction?.id,
+          "Investment updated:",
+          result.updatedInvestment?.principalAmount
+        );
+
+        res.status(201).json({
+          transaction: result.transaction,
+          updatedInvestment: result.updatedInvestment,
+          message: "Payment recorded and principal amount updated successfully",
+        });
+      } catch (error) {
+        console.error("Error in record-payment:", error);
+        if (error instanceof z.ZodError) {
+          return res
+            .status(400)
+            .json({ error: "Invalid data", details: error.errors });
+        }
+        res.status(500).json({ error: "Failed to record payment" });
       }
-      
-      // Verify the investment belongs to the authenticated user
-      const investment = await appStorage.getInvestment(validatedData.investmentId);
-      console.log('Found investment:', investment?.id, 'User:', investment?.userId);
-      if (!investment) {
-        return res.status(404).json({ error: "Investment not found" });
-      }
-      
-      if (investment.userId !== req.user.id) {
-        console.log('Access denied: Investment userId', investment.userId, 'vs User ID', req.user.id);
-        return res.status(403).json({ error: "Access denied: You can only record payments for your own investments" });
-      }
-      
-      console.log('Creating transaction...');
-      const result = await appStorage.createTransactionAndUpdatePrincipal(validatedData);
-      console.log('Transaction result:', result.transaction?.id, 'Investment updated:', result.updatedInvestment?.principalAmount);
-      
-      res.status(201).json({
-        transaction: result.transaction,
-        updatedInvestment: result.updatedInvestment,
-        message: "Payment recorded and principal amount updated successfully"
-      });
-    } catch (error) {
-      console.error('Error in record-payment:', error);
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid data", details: error.errors });
-      }
-      res.status(500).json({ error: "Failed to record payment" });
     }
-  });
+  );
 
   // Get transactions grouped by month/year for investments view
   app.get("/api/transactions/grouped", requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      console.log('Getting grouped transactions for user:', userId);
+      console.log("Getting grouped transactions for user:", userId);
       const investments = await appStorage.getInvestments(userId);
-      const allTransactions = await appStorage.getAllTransactionsForUser(userId);
-      
+      const allTransactions = await appStorage.getAllTransactionsForUser(
+        userId
+      );
+
       // Create a map of investment ID to investment details
-      const investmentMap = new Map(investments.map(inv => [inv.id, inv]));
-      
+      const investmentMap = new Map(investments.map((inv) => [inv.id, inv]));
+
       // Group transactions by month/year
-      const groupedTransactions = allTransactions.reduce((groups, transaction) => {
-        const investment = investmentMap.get(transaction.investmentId);
-        if (!investment) return groups; // Skip transactions for non-existent investments
-        
-        const date = new Date(transaction.transactionDate);
-        const monthYear = date.toLocaleDateString('en-GB', { year: 'numeric', month: 'long' });
-        const sortKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        
-        if (!groups[sortKey]) {
-          groups[sortKey] = {
-            displayName: monthYear,
-            sortKey,
-            transactions: []
-          };
-        }
-        
-        groups[sortKey].transactions.push({
-          ...transaction,
-          investment: investment
-        });
-        
-        return groups;
-      }, {} as Record<string, { displayName: string; sortKey: string; transactions: (Transaction & { investment: Investment })[] }>);
-      
+      const groupedTransactions = allTransactions.reduce(
+        (groups, transaction) => {
+          const investment = investmentMap.get(transaction.investmentId);
+          if (!investment) return groups; // Skip transactions for non-existent investments
+
+          const date = new Date(transaction.transactionDate);
+          const monthYear = date.toLocaleDateString("en-GB", {
+            year: "numeric",
+            month: "long",
+          });
+          const sortKey = `${date.getFullYear()}-${String(
+            date.getMonth() + 1
+          ).padStart(2, "0")}`;
+
+          if (!groups[sortKey]) {
+            groups[sortKey] = {
+              displayName: monthYear,
+              sortKey,
+              transactions: [],
+            };
+          }
+
+          groups[sortKey].transactions.push({
+            ...transaction,
+            investment: investment,
+          });
+
+          return groups;
+        },
+        {} as Record<
+          string,
+          {
+            displayName: string;
+            sortKey: string;
+            transactions: (Transaction & { investment: Investment })[];
+          }
+        >
+      );
+
       // Sort groups by date (most recent first)
-      const sortedGroups = Object.values(groupedTransactions).sort((a, b) => 
+      const sortedGroups = Object.values(groupedTransactions).sort((a, b) =>
         b.sortKey.localeCompare(a.sortKey)
       );
-      
+
       res.json(sortedGroups);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch grouped transactions" });
@@ -281,7 +368,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.id;
       const investments = await appStorage.getInvestments(userId);
-      
+
       // Calculate total invested (sum of all principal amounts)
       const totalInvested = investments.reduce((sum, inv) => {
         return sum + parseFloat(inv.principalAmount);
@@ -289,70 +376,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Calculate month-over-month change using transaction history when available
       const now = new Date();
-      const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-      
+      const endOfLastMonth = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        0,
+        23,
+        59,
+        59,
+        999
+      );
+
       // Get all transactions for the user
-      const allTransactions = await appStorage.getAllTransactionsForUser(userId);
-      
+      const allTransactions = await appStorage.getAllTransactionsForUser(
+        userId
+      );
+
       let finalCurrentTotal: number;
       let finalLastMonthTotal: number;
-      
+
       // Use transaction data if any transactions exist, otherwise fallback to investment principals
       if (allTransactions.length > 0) {
         // Calculate total invested from transaction history (assumes deposits are positive amounts)
         finalCurrentTotal = allTransactions
-          .filter(tx => new Date(tx.transactionDate) <= now)
+          .filter((tx) => new Date(tx.transactionDate) <= now)
           .reduce((sum, tx) => sum + parseFloat(tx.amount), 0);
-        
+
         finalLastMonthTotal = allTransactions
-          .filter(tx => new Date(tx.transactionDate) <= endOfLastMonth)
+          .filter((tx) => new Date(tx.transactionDate) <= endOfLastMonth)
           .reduce((sum, tx) => sum + parseFloat(tx.amount), 0);
       } else {
         // Fallback to investment principal amounts with proper time boundaries
         finalCurrentTotal = totalInvested;
         finalLastMonthTotal = investments
-          .filter(inv => new Date(inv.startDate) <= endOfLastMonth)
+          .filter((inv) => new Date(inv.startDate) <= endOfLastMonth)
           .reduce((sum, inv) => sum + parseFloat(inv.principalAmount), 0);
       }
-      
+
       // Calculate month-over-month percentage change (as of now vs end of last month)
-      const changeVsLastMonth = finalLastMonthTotal > 0 ? 
-        ((finalCurrentTotal - finalLastMonthTotal) / finalLastMonthTotal * 100) : 
-        null; // Return null when no baseline exists for proper UI handling
+      const changeVsLastMonth =
+        finalLastMonthTotal > 0
+          ? ((finalCurrentTotal - finalLastMonthTotal) / finalLastMonthTotal) *
+            100
+          : null; // Return null when no baseline exists for proper UI handling
 
       // Helper function to calculate next due date based on frequency and start cycle
       const getNextDueDate = (investment: any, fromDate: Date) => {
         if (!investment.dueDay || !investment.startDate) return null;
-        
+
         const startDate = new Date(investment.startDate);
         const startYear = startDate.getFullYear();
         const startMonth = startDate.getMonth();
-        
+
         // Normalize dates to day precision (remove time component)
-        const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
-        const anchor = new Date(Math.max(startOfDay(startDate).getTime(), startOfDay(fromDate).getTime()));
-        
+        const startOfDay = (date: Date) =>
+          new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const anchor = new Date(
+          Math.max(
+            startOfDay(startDate).getTime(),
+            startOfDay(fromDate).getTime()
+          )
+        );
+
         // Helper to clamp day to valid range for given month/year
         const clampDay = (year: number, month: number, day: number) => {
           const daysInMonth = new Date(year, month + 1, 0).getDate();
           return Math.min(day, daysInMonth);
         };
-        
+
         // Calculate next occurrence based on frequency
         let nextDue: Date | null = null;
-        
+
         switch (investment.paymentFrequency) {
-          case 'monthly': {
+          case "monthly": {
             // Find next month where due date >= anchor
             let targetYear = anchor.getFullYear();
             let targetMonth = anchor.getMonth();
-            
+
             do {
-              const clampedDay = clampDay(targetYear, targetMonth, investment.dueDay);
+              const clampedDay = clampDay(
+                targetYear,
+                targetMonth,
+                investment.dueDay
+              );
               nextDue = new Date(targetYear, targetMonth, clampedDay);
-              
+
               if (nextDue >= anchor) break;
-              
+
               targetMonth++;
               if (targetMonth > 11) {
                 targetMonth = 0;
@@ -361,91 +470,120 @@ export async function registerRoutes(app: Express): Promise<Server> {
             } while (true);
             break;
           }
-          
-          case 'quarterly': {
+
+          case "quarterly": {
             // Find next quarter cycle from start month
             let k = 0;
             do {
               const targetMonth = (startMonth + k * 3) % 12;
-              const targetYear = startYear + Math.floor((startMonth + k * 3) / 12);
-              const clampedDay = clampDay(targetYear, targetMonth, investment.dueDay);
+              const targetYear =
+                startYear + Math.floor((startMonth + k * 3) / 12);
+              const clampedDay = clampDay(
+                targetYear,
+                targetMonth,
+                investment.dueDay
+              );
               nextDue = new Date(targetYear, targetMonth, clampedDay);
-              
+
               if (nextDue >= anchor) break;
               k++;
             } while (k < 100); // Safety limit
             break;
           }
-          
-          case 'half_yearly': {
+
+          case "half_yearly": {
             // Find next half-year cycle from start month
             let k = 0;
             do {
               const targetMonth = (startMonth + k * 6) % 12;
-              const targetYear = startYear + Math.floor((startMonth + k * 6) / 12);
-              const clampedDay = clampDay(targetYear, targetMonth, investment.dueDay);
+              const targetYear =
+                startYear + Math.floor((startMonth + k * 6) / 12);
+              const clampedDay = clampDay(
+                targetYear,
+                targetMonth,
+                investment.dueDay
+              );
               nextDue = new Date(targetYear, targetMonth, clampedDay);
-              
+
               if (nextDue >= anchor) break;
               k++;
             } while (k < 50); // Safety limit
             break;
           }
-          
-          case 'yearly': {
+
+          case "yearly": {
             // Find next year cycle from start date
             let targetYear = startYear;
             do {
-              const clampedDay = clampDay(targetYear, startMonth, investment.dueDay);
+              const clampedDay = clampDay(
+                targetYear,
+                startMonth,
+                investment.dueDay
+              );
               nextDue = new Date(targetYear, startMonth, clampedDay);
-              
+
               if (nextDue >= anchor) break;
               targetYear++;
             } while (targetYear < startYear + 50); // Safety limit
             break;
           }
-          
+
           default:
             return null;
         }
-        
+
         return nextDue;
       };
 
       // Calculate upcoming payments with amounts
       const today = new Date();
       const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
-      
-      const upcomingPayments = investments.filter(inv => {
-        if (inv.paymentFrequency === 'one_time' || !inv.dueDay || !inv.isActive) return false;
-        
-        const nextDue = getNextDueDate(inv, today);
-        return nextDue && nextDue <= nextWeek;
-      }).map(inv => ({
-        ...inv,
-        nextDueDate: getNextDueDate(inv, today)
-      }));
+
+      const upcomingPayments = investments
+        .filter((inv) => {
+          if (
+            inv.paymentFrequency === "one_time" ||
+            !inv.dueDay ||
+            !inv.isActive
+          )
+            return false;
+
+          const nextDue = getNextDueDate(inv, today);
+          return nextDue && nextDue <= nextWeek;
+        })
+        .map((inv) => ({
+          ...inv,
+          nextDueDate: getNextDueDate(inv, today),
+        }));
 
       // Find next payment details
-      const nextPayment = upcomingPayments.length > 0 ? 
-        upcomingPayments.sort((a, b) => {
-          return (a.nextDueDate?.getTime() || 0) - (b.nextDueDate?.getTime() || 0);
-        })[0] : null;
+      const nextPayment =
+        upcomingPayments.length > 0
+          ? upcomingPayments.sort((a, b) => {
+              return (
+                (a.nextDueDate?.getTime() || 0) -
+                (b.nextDueDate?.getTime() || 0)
+              );
+            })[0]
+          : null;
 
       const nextPaymentDate = nextPayment?.nextDueDate;
 
       // Calculate actual payment amount for recurring investments
       const calculatePaymentAmount = (investment: any) => {
         // Use paymentAmount if available and investment is recurring
-        if (investment.paymentAmount && investment.paymentFrequency !== 'one_time') {
+        if (
+          investment.paymentAmount &&
+          investment.paymentFrequency !== "one_time"
+        ) {
           return parseFloat(investment.paymentAmount);
         }
-        
+
         // For one-time investments, return the full amount
-        if (investment.paymentFrequency === 'one_time') {
+        if (investment.paymentFrequency === "one_time") {
           return parseFloat(investment.principalAmount);
         }
-        
+
         // Fallback: if no paymentAmount is set, return the principal amount
         // (This handles legacy data before the paymentAmount field was added)
         return parseFloat(investment.principalAmount);
@@ -453,11 +591,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({
         totalInvested: Math.round(totalInvested),
-        changeVsLastMonth: changeVsLastMonth !== null ? Math.round(changeVsLastMonth * 100) / 100 : null,
+        changeVsLastMonth:
+          changeVsLastMonth !== null
+            ? Math.round(changeVsLastMonth * 100) / 100
+            : null,
         upcomingPayments: upcomingPayments.length,
-        nextPaymentAmount: nextPayment ? calculatePaymentAmount(nextPayment) : null,
+        nextPaymentAmount: nextPayment
+          ? calculatePaymentAmount(nextPayment)
+          : null,
         nextPaymentDate: nextPaymentDate ? nextPaymentDate.getDate() : null,
-        nextPaymentName: nextPayment ? nextPayment.name : null
+        nextPaymentName: nextPayment ? nextPayment.name : null,
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch dashboard summary" });
@@ -465,7 +608,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Bills routes
-  
+
   // Get all bills
   app.get("/api/bills", requireAuth, async (req: any, res) => {
     try {
@@ -481,56 +624,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/bills/summary", requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
+      const year = req.query.year
+        ? parseInt(req.query.year as string)
+        : new Date().getFullYear();
       const bills = await appStorage.getBills(userId);
-      
+
       const totalMonthlyBills = bills
-        .filter(bill => bill.isActive && bill.frequency === 'monthly')
+        .filter((bill) => bill.isActive && bill.frequency === "monthly")
         .reduce((sum, bill) => sum + parseFloat(bill.amount), 0);
 
       const totalQuarterlyBills = bills
-        .filter(bill => bill.isActive && bill.frequency === 'quarterly')
+        .filter((bill) => bill.isActive && bill.frequency === "quarterly")
         .reduce((sum, bill) => sum + parseFloat(bill.amount), 0);
 
       const totalYearlyBills = bills
-        .filter(bill => bill.isActive && bill.frequency === 'yearly')
+        .filter((bill) => bill.isActive && bill.frequency === "yearly")
         .reduce((sum, bill) => sum + parseFloat(bill.amount), 0);
 
       // Calculate monthly equivalent
-      const monthlyEquivalent = totalMonthlyBills + (totalQuarterlyBills / 3) + (totalYearlyBills / 12);
+      const monthlyEquivalent =
+        totalMonthlyBills + totalQuarterlyBills / 3 + totalYearlyBills / 12;
 
       // Get bills due this week
       const today = new Date();
       const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
-      
-      const billsDueThisWeek = bills.filter(bill => {
-        if (!bill.isActive || !bill.dueDay || bill.frequency === 'one_time') return false;
-        
+
+      const billsDueThisWeek = bills.filter((bill) => {
+        if (!bill.isActive || !bill.dueDay || bill.frequency === "one_time")
+          return false;
+
         // Helper to get next valid due date
         const getNextDueDate = (dueDay: number, fromDate: Date) => {
           const currentYear = fromDate.getFullYear();
           const currentMonth = fromDate.getMonth();
-          
+
           // Try current month first
-          const daysInCurrentMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+          const daysInCurrentMonth = new Date(
+            currentYear,
+            currentMonth + 1,
+            0
+          ).getDate();
           const validDueDay = Math.min(dueDay, daysInCurrentMonth);
-          const currentMonthDue = new Date(currentYear, currentMonth, validDueDay);
-          
+          const currentMonthDue = new Date(
+            currentYear,
+            currentMonth,
+            validDueDay
+          );
+
           if (currentMonthDue >= fromDate) {
             return currentMonthDue;
           }
-          
+
           // Try next month
           const nextMonth = currentMonth + 1;
           const nextYear = nextMonth > 11 ? currentYear + 1 : currentYear;
           const adjustedNextMonth = nextMonth > 11 ? 0 : nextMonth;
-          
-          const daysInNextMonth = new Date(nextYear, adjustedNextMonth + 1, 0).getDate();
+
+          const daysInNextMonth = new Date(
+            nextYear,
+            adjustedNextMonth + 1,
+            0
+          ).getDate();
           const validNextDueDay = Math.min(dueDay, daysInNextMonth);
-          
+
           return new Date(nextYear, adjustedNextMonth, validNextDueDay);
         };
-        
+
         const nextDueDate = getNextDueDate(bill.dueDay, today);
         return nextDueDate <= nextWeek;
       });
@@ -540,61 +699,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
         Array.from({ length: 12 }, async (_, monthIndex) => {
           let projected = 0;
           let actual = 0;
-          
+
           // Calculate projected amounts with proper cycle anchoring
-          bills.filter(bill => bill.isActive).forEach(bill => {
-            const amount = parseFloat(bill.amount);
-            
-            if (bill.frequency === 'monthly') {
-              projected += amount;
-            } else if (bill.frequency === 'quarterly') {
-              // Use nextDueDate or creation date as anchor, bill occurs every 3 months
-              const anchorDate = bill.nextDueDate ? new Date(bill.nextDueDate) : new Date(bill.createdAt);
-              const anchorMonth = anchorDate.getMonth();
-              
-              // Check if this month falls on a quarterly cycle from anchor
-              const monthsFromAnchor = (monthIndex - anchorMonth + 12) % 12;
-              if (monthsFromAnchor % 3 === 0) {
+          bills
+            .filter((bill) => bill.isActive)
+            .forEach((bill) => {
+              const amount = parseFloat(bill.amount);
+
+              if (bill.frequency === "monthly") {
                 projected += amount;
+              } else if (bill.frequency === "quarterly") {
+                // Use nextDueDate or creation date as anchor, bill occurs every 3 months
+                const anchorDate = bill.nextDueDate
+                  ? new Date(bill.nextDueDate)
+                  : new Date(bill.createdAt);
+                const anchorMonth = anchorDate.getMonth();
+
+                // Check if this month falls on a quarterly cycle from anchor
+                const monthsFromAnchor = (monthIndex - anchorMonth + 12) % 12;
+                if (monthsFromAnchor % 3 === 0) {
+                  projected += amount;
+                }
+              } else if (bill.frequency === "yearly") {
+                // Use nextDueDate or creation date as anchor, bill occurs once per year
+                const anchorDate = bill.nextDueDate
+                  ? new Date(bill.nextDueDate)
+                  : new Date(bill.createdAt);
+                const anchorMonth = anchorDate.getMonth();
+
+                if (monthIndex === anchorMonth) {
+                  projected += amount;
+                }
+              } else if (bill.frequency === "half_yearly") {
+                // Use nextDueDate or creation date as anchor, bill occurs every 6 months
+                const anchorDate = bill.nextDueDate
+                  ? new Date(bill.nextDueDate)
+                  : new Date(bill.createdAt);
+                const anchorMonth = anchorDate.getMonth();
+
+                // Check if this month falls on a half-yearly cycle from anchor
+                const monthsFromAnchor = (monthIndex - anchorMonth + 12) % 12;
+                if (monthsFromAnchor % 6 === 0) {
+                  projected += amount;
+                }
               }
-            } else if (bill.frequency === 'yearly') {
-              // Use nextDueDate or creation date as anchor, bill occurs once per year
-              const anchorDate = bill.nextDueDate ? new Date(bill.nextDueDate) : new Date(bill.createdAt);
-              const anchorMonth = anchorDate.getMonth();
-              
-              if (monthIndex === anchorMonth) {
-                projected += amount;
-              }
-            } else if (bill.frequency === 'half_yearly') {
-              // Use nextDueDate or creation date as anchor, bill occurs every 6 months
-              const anchorDate = bill.nextDueDate ? new Date(bill.nextDueDate) : new Date(bill.createdAt);
-              const anchorMonth = anchorDate.getMonth();
-              
-              // Check if this month falls on a half-yearly cycle from anchor
-              const monthsFromAnchor = (monthIndex - anchorMonth + 12) % 12;
-              if (monthsFromAnchor % 6 === 0) {
-                projected += amount;
-              }
-            }
-          });
-          
+            });
+
           // Calculate actual payments for this month (only count paid status)
           for (const bill of bills) {
             const payments = await appStorage.getBillPayments(bill.id);
-            const monthPayments = payments.filter(payment => {
+            const monthPayments = payments.filter((payment) => {
               const paymentDate = new Date(payment.paidDate);
-              return payment.status === 'paid' && 
-                     paymentDate.getFullYear() === year && 
-                     paymentDate.getMonth() === monthIndex;
+              return (
+                payment.status === "paid" &&
+                paymentDate.getFullYear() === year &&
+                paymentDate.getMonth() === monthIndex
+              );
             });
-            actual += monthPayments.reduce((sum, payment) => sum + parseFloat(payment.amount), 0);
+            actual += monthPayments.reduce(
+              (sum, payment) => sum + parseFloat(payment.amount),
+              0
+            );
           }
-          
+
           return {
             month: monthIndex + 1,
-            monthName: new Date(year, monthIndex).toLocaleString('default', { month: 'long' }),
+            monthName: new Date(year, monthIndex).toLocaleString("default", {
+              month: "long",
+            }),
             projected: Math.round(projected),
-            actual: Math.round(actual)
+            actual: Math.round(actual),
           };
         })
       );
@@ -606,24 +780,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return map;
       }, {} as Record<string, string>);
 
-      // Category breakdown using proper ID to name mapping
-      const categoryBreakdown = bills
-        .filter(bill => bill.isActive)
-        .reduce((acc, bill) => {
-          // Map category ID to name, fallback to "Unknown Category" if not found
-          const categoryName = categoryMap[bill.category] || "Unknown Category";
-          const monthlyAmount = bill.frequency === 'monthly' ? parseFloat(bill.amount) :
-                              bill.frequency === 'quarterly' ? parseFloat(bill.amount) / 3 :
-                              bill.frequency === 'yearly' ? parseFloat(bill.amount) / 12 :
-                              parseFloat(bill.amount);
-          
-          if (!acc[categoryName]) {
-            acc[categoryName] = { total: 0, count: 0 };
-          }
-          acc[categoryName].total += monthlyAmount;
-          acc[categoryName].count += 1;
-          return acc;
-        }, {} as Record<string, { total: number; count: number }>);
+      // Category breakdown using actual payment amounts from all payments
+      const categoryBreakdown: Record<
+        string,
+        { total: number; count: number }
+      > = {};
+
+      for (const bill of bills.filter((b) => b.isActive)) {
+        const categoryName = categoryMap[bill.category] || "Unknown Category";
+        const payments = await appStorage.getBillPayments(bill.id);
+
+        // Sum all paid payments for this bill
+        const paidPayments = payments.filter((p) => p.status === "paid");
+        const totalPaid = paidPayments.reduce(
+          (sum, payment) => sum + parseFloat(payment.amount),
+          0
+        );
+
+        if (!categoryBreakdown[categoryName]) {
+          categoryBreakdown[categoryName] = { total: 0, count: 0 };
+        }
+
+        categoryBreakdown[categoryName].total += totalPaid;
+        categoryBreakdown[categoryName].count += 1;
+      }
 
       res.json({
         totalMonthlyBills: Math.round(totalMonthlyBills),
@@ -631,10 +811,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalYearlyBills: Math.round(totalYearlyBills),
         monthlyEquivalent: Math.round(monthlyEquivalent),
         billsDueThisWeek: billsDueThisWeek.length,
-        activeBillsCount: bills.filter(bill => bill.isActive).length,
+        activeBillsCount: bills.filter((bill) => bill.isActive).length,
         categoryBreakdown,
         monthlyTotals,
-        year
+        year,
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch bills summary" });
@@ -645,27 +825,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/bills/payments", requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
-      
+      const year = req.query.year
+        ? parseInt(req.query.year as string)
+        : new Date().getFullYear();
+
       const bills = await appStorage.getBills(userId);
       const allPayments: any[] = [];
-      
+
       for (const bill of bills) {
         const payments = await appStorage.getBillPayments(bill.id);
-        const yearPayments = payments.filter(payment => {
+        const yearPayments = payments.filter((payment) => {
           const paymentYear = new Date(payment.paidDate).getFullYear();
           return paymentYear === year;
         });
-        
-        yearPayments.forEach(payment => {
+
+        yearPayments.forEach((payment) => {
           allPayments.push({
             ...payment,
             billName: bill.name,
-            category: bill.category
+            category: bill.category,
           });
         });
       }
-      
+
       res.json(allPayments);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch payments" });
@@ -708,7 +890,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(payment);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid payment data", details: error.errors });
+        return res
+          .status(400)
+          .json({ error: "Invalid payment data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to create payment" });
     }
@@ -723,7 +907,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(bill);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid data", details: error.errors });
+        return res
+          .status(400)
+          .json({ error: "Invalid data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to create bill" });
     }
@@ -740,7 +926,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(bill);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid data", details: error.errors });
+        return res
+          .status(400)
+          .json({ error: "Invalid data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to update bill" });
     }
@@ -760,7 +948,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Custom Investment Types routes
-  
+
   // Get all investment types
   app.get("/api/investment-types", requireAuth, async (req: any, res) => {
     try {
@@ -781,7 +969,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(type);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid data", details: error.errors });
+        return res
+          .status(400)
+          .json({ error: "Invalid data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to create investment type" });
     }
@@ -790,15 +980,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update investment type
   app.put("/api/investment-types/:id", async (req, res) => {
     try {
-      const validatedData = insertInvestmentTypeSchema.partial().parse(req.body);
-      const type = await appStorage.updateInvestmentType(req.params.id, validatedData);
+      const validatedData = insertInvestmentTypeSchema
+        .partial()
+        .parse(req.body);
+      const type = await appStorage.updateInvestmentType(
+        req.params.id,
+        validatedData
+      );
       if (!type) {
         return res.status(404).json({ error: "Investment type not found" });
       }
       res.json(type);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid data", details: error.errors });
+        return res
+          .status(400)
+          .json({ error: "Invalid data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to update investment type" });
     }
@@ -818,7 +1015,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Custom Bill Categories routes
-  
+
   // Get all bill categories
   app.get("/api/bill-categories", requireAuth, async (req: any, res) => {
     try {
@@ -835,11 +1032,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertBillCategorySchema.parse(req.body);
       const userId = req.user.id;
-      const category = await appStorage.createBillCategory(userId, validatedData);
+      const category = await appStorage.createBillCategory(
+        userId,
+        validatedData
+      );
       res.status(201).json(category);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid data", details: error.errors });
+        return res
+          .status(400)
+          .json({ error: "Invalid data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to create bill category" });
     }
@@ -849,14 +1051,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/bill-categories/:id", async (req, res) => {
     try {
       const validatedData = insertBillCategorySchema.partial().parse(req.body);
-      const category = await appStorage.updateBillCategory(req.params.id, validatedData);
+      const category = await appStorage.updateBillCategory(
+        req.params.id,
+        validatedData
+      );
       if (!category) {
         return res.status(404).json({ error: "Bill category not found" });
       }
       res.json(category);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid data", details: error.errors });
+        return res
+          .status(400)
+          .json({ error: "Invalid data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to update bill category" });
     }
@@ -876,17 +1083,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Data Export/Import routes
-  
+
   // Export all data
   app.get("/api/data/export", requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
       const exportData = await appStorage.exportAllData(userId);
-      
+
       // Set headers for file download
-      res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Content-Disposition', `attachment; filename="financial-data-export-${new Date().toISOString().split('T')[0]}.json"`);
-      
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="financial-data-export-${
+          new Date().toISOString().split("T")[0]
+        }.json"`
+      );
+
       res.json(exportData);
     } catch (error) {
       res.status(500).json({ error: "Failed to export data" });
@@ -898,17 +1110,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.id;
       const success = await appStorage.importAllData(userId, req.body);
-      
+
       if (!success) {
         return res.status(400).json({ error: "Failed to import data" });
       }
-      
+
       res.json({ message: "Data imported successfully" });
     } catch (error) {
       res.status(500).json({ error: "Failed to import data" });
     }
   });
-
 
   // Update bill payment
   app.put("/api/bill-payments/:id", async (req, res) => {
@@ -922,7 +1133,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(payment);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid payment data", details: error.errors });
+        return res
+          .status(400)
+          .json({ error: "Invalid payment data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to update payment" });
     }
@@ -950,12 +1163,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(payment);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid data", details: error.errors });
+        return res
+          .status(400)
+          .json({ error: "Invalid data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to create bill payment" });
     }
   });
-
 
   const httpServer = createServer(app);
   return httpServer;
